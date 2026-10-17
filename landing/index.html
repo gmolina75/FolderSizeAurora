@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Folder Size Aurora — Sabe dónde se fue tu espacio</title>
+<meta name="description" content="Analizador de tamaño de carpetas y unidades para Windows que además vigila tus límites y te avisa antes de quedarte sin espacio. En .NET 10, sin dependencias externas.">
+<meta name="theme-color" content="#1F6FEB">
+<link rel="icon" href="assets/logo-32.png" sizes="32x32">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/logo-128.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Folder Size Aurora">
+<meta property="og:description" content="Sabe dónde se fue tu espacio. Y avisa antes de quedarte sin él.">
+<meta property="og:image" content="assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<style>
+/* ============================================================
+   Sistema visual tomado de la propia aplicación: mismo fondo, misma
+   tinta, mismo acento. Nada de colores inventados ni de terceros.
+   ============================================================ */
+:root{
+  --ground:#F7F8FA;
+  --panel:#FFFFFF;
+  --sunken:#F1F3F7;
+  --ink:#101418;
+  --ink2:#495361;
+  --ink3:#5C6675;
+  --rule:#E4E8EE;
+  --rule-strong:#C9D0DA;
+  --accent:#1F6FEB;
+  --accent-ink:#1256C4;
+  --accent-soft:#E9F0FE;
+  --ok:#1B7A46;
+  --warn:#9A5C00;
+  --bad:#C0392B;
+  --r-sm:8px;
+  --r-md:12px;
+  --r-lg:18px;
+  --shadow-1:0 1px 2px rgba(16,20,24,.05), 0 8px 24px rgba(16,20,24,.06);
+  --shadow-2:0 2px 4px rgba(16,20,24,.06), 0 24px 60px rgba(16,20,24,.12);
+  --maxw:1120px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --ground:#0E1116;
+    --panel:#151A21;
+    --sunken:#11161C;
+    --ink:#E8ECF2;
+    --ink2:#AEB8C6;
+    --ink3:#8792A2;
+    --rule:#232B35;
+    --rule-strong:#313B47;
+    --accent:#4C93FF;
+    --accent-ink:#8FB8FF;
+    --accent-soft:#16233A;
+    --ok:#3FB37A;
+    --warn:#D79A3B;
+    --bad:#F0655A;
+    --shadow-1:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --shadow-2:0 2px 4px rgba(0,0,0,.5), 0 24px 60px rgba(0,0,0,.55);
+  }
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  font-size:16.5px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;display:block}
+a{color:var(--accent-ink)}
+h1,h2,h3{line-height:1.18;letter-spacing:-.018em;margin:0 0 .5em}
+h1{font-size:clamp(2.1rem,5vw,3.35rem);font-weight:700}
+h2{font-size:clamp(1.55rem,3.2vw,2.1rem);font-weight:680}
+h3{font-size:1.12rem;font-weight:650}
+p{margin:0 0 1.1em}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 24px}
+.skip{position:absolute;left:-9999px}
+.skip:focus{left:12px;top:12px;z-index:99;background:var(--panel);padding:10px 14px;border-radius:var(--r-sm);box-shadow:var(--shadow-1)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* ---------------- Barra superior ---------------- */
+.nav{
+  position:sticky;top:0;z-index:50;
+  background:color-mix(in srgb,var(--ground) 86%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--rule);
+}
+.nav .wrap{display:flex;align-items:center;gap:14px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:660;letter-spacing:-.01em;color:var(--ink);text-decoration:none}
+.brand img{width:28px;height:28px;border-radius:7px}
+.nav nav{margin-left:auto;display:flex;gap:22px}
+.nav nav a{color:var(--ink2);text-decoration:none;font-size:.94rem}
+.nav nav a:hover{color:var(--ink)}
+@media (max-width:820px){ .nav nav{display:none} }
+
+/* ---------------- Botones ---------------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  height:44px;padding:0 20px;border-radius:var(--r-sm);
+  border:1px solid transparent;text-decoration:none;
+  font:inherit;font-weight:600;font-size:.97rem;cursor:pointer;
+  transition:background .14s ease,border-color .14s ease,transform .08s ease;
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-ink)}
+.btn-ghost{background:var(--panel);color:var(--ink);border-color:var(--rule-strong)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent-ink)}
+.btn-sm{height:36px;padding:0 14px;font-size:.9rem}
+
+/* ---------------- Portada ---------------- */
+.hero{padding:76px 0 64px;text-align:center;overflow:hidden}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--panel);border:1px solid var(--rule);
+  border-radius:999px;padding:6px 14px;margin-bottom:26px;
+  font-size:.85rem;color:var(--ink2);font-weight:600;
+}
+.hero .lead{max-width:660px;margin:0 auto 30px;font-size:1.16rem;color:var(--ink2)}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+.hint{color:var(--ink3);font-size:.88rem;margin:0}
+
+.shot{
+  margin:52px auto 0;max-width:980px;
+  border:1px solid var(--rule-strong);border-radius:var(--r-lg);
+  overflow:hidden;background:var(--panel);box-shadow:var(--shadow-2);
+}
+.shot img{width:100%}
+
+/* ---------------- Cifras ---------------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);
+  border:1px solid var(--rule);border-radius:var(--r-md);overflow:hidden;margin-top:46px}
+.stat{background:var(--panel);padding:22px 18px;text-align:center}
+.stat b{display:block;font-size:1.65rem;font-weight:680;letter-spacing:-.02em;line-height:1.2}
+.stat span{display:block;color:var(--ink3);font-size:.85rem;margin-top:4px}
+@media (max-width:720px){ .stats{grid-template-columns:repeat(2,1fr)} }
+
+/* ---------------- Secciones ---------------- */
+section.band{padding:72px 0}
+section.band.tint{background:var(--sunken);border-block:1px solid var(--rule)}
+.sec-head{max-width:660px;margin-bottom:40px}
+.sec-head p{color:var(--ink2);font-size:1.05rem;margin-bottom:0}
+.centrada{text-align:center;margin-inline:auto}
+
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+@media (max-width:900px){ .cards{grid-template-columns:1fr} }
+.card{
+  background:var(--panel);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:24px;box-shadow:var(--shadow-1);
+}
+.card .ico{
+  width:40px;height:40px;border-radius:10px;background:var(--accent-soft);
+  display:grid;place-items:center;margin-bottom:16px;
+}
+.card .ico svg{width:20px;height:20px;stroke:var(--accent);fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.card p{color:var(--ink2);font-size:.95rem;margin:0}
+
+/* ---------------- Rendimiento ---------------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:center}
+@media (max-width:900px){ .split{grid-template-columns:1fr;gap:34px} }
+table.data{width:100%;border-collapse:collapse;font-size:.93rem}
+table.data caption{text-align:left;color:var(--ink3);font-size:.85rem;padding-bottom:10px}
+table.data th,table.data td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule)}
+table.data th{color:var(--ink3);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+table.data td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.data td.gain{color:var(--ok);font-weight:650}
+table.data tr:last-child td{border-bottom:0}
+
+/* ---------------- Capturas ---------------- */
+.shots{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+@media (max-width:820px){ .shots{grid-template-columns:1fr} }
+.shots figure{margin:0;background:var(--panel);border:1px solid var(--rule);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow-1)}
+.shots img{width:100%}
+.shots figcaption{padding:12px 16px;color:var(--ink3);font-size:.86rem;border-top:1px solid var(--rule)}
+.detalle{
+  display:grid;grid-template-columns:330px 1fr;gap:34px;align-items:center;margin-top:24px;
+  background:var(--panel);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:22px;box-shadow:var(--shadow-1);
+}
+.detalle figure{margin:0;border:1px solid var(--rule);border-radius:var(--r-sm);overflow:hidden}
+.detalle h3{margin-bottom:8px}
+.detalle p{color:var(--ink2);font-size:.95rem;margin-bottom:0}
+@media (max-width:820px){ .detalle{grid-template-columns:1fr;gap:22px} }
+
+/* ---------------- Pasos ---------------- */
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+@media (max-width:900px){ .steps{grid-template-columns:1fr} }
+.step{position:relative;padding:26px 24px 24px;background:var(--panel);border:1px solid var(--rule);border-radius:var(--r-md)}
+.step::before{
+  counter-increment:s;content:counter(s);
+  display:grid;place-items:center;width:30px;height:30px;border-radius:50%;
+  background:var(--accent);color:#fff;font-weight:700;font-size:.92rem;margin-bottom:14px;
+}
+.step p{color:var(--ink2);font-size:.95rem;margin:0}
+code{
+  font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;
+  background:var(--sunken);border:1px solid var(--rule);border-radius:5px;
+  padding:1px 6px;font-size:.9em;
+}
+pre{background:var(--sunken);border:1px solid var(--rule);border-radius:var(--r-sm);
+  padding:14px 16px;overflow:auto;font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:.86rem}
+pre code{background:none;border:0;padding:0}
+
+/* ---------------- Atajos ---------------- */
+.keys{display:flex;flex-wrap:wrap;gap:10px}
+kbd{
+  font-family:"Segoe UI",system-ui,sans-serif;font-size:.82rem;font-weight:600;
+  background:var(--panel);border:1px solid var(--rule-strong);border-bottom-width:2px;
+  border-radius:6px;padding:5px 9px;color:var(--ink);white-space:nowrap;
+}
+
+/* ---------------- Preguntas ---------------- */
+details{
+  background:var(--panel);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:0 18px;margin-bottom:10px;
+}
+details[open]{box-shadow:var(--shadow-1)}
+summary{
+  cursor:pointer;list-style:none;padding:16px 0;font-weight:620;
+  display:flex;align-items:center;gap:10px;
+}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";margin-left:auto;color:var(--ink3);font-size:1.2rem;font-weight:400}
+details[open] summary::after{content:"−"}
+details p{margin:0 0 16px;color:var(--ink2);font-size:.95rem}
+
+/* ---------------- Pie ---------------- */
+footer{border-top:1px solid var(--rule);padding:36px 0;color:var(--ink3);font-size:.9rem}
+footer .wrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+footer .sp{margin-left:auto}
+@media (prefers-color-scheme: dark){ .btn-primary{color:#08111F} }
+</style>
+</head>
+<body>
+
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <img src="assets/logo.svg" alt="" width="28" height="28">
+      Folder Size Aurora
+    </a>
+    <nav aria-label="Secciones">
+      <a href="#pestanas">Qué hace</a>
+      <a href="#rapido">Rendimiento</a>
+      <a href="#empezar">Empezar</a>
+      <a href="FolderSizeAurora.msi" download>Descargar</a>
+    </nav>
+  </div>
+</header>
+
+<main id="contenido">
+
+  <!-- ============ Portada ============ -->
+  <section class="hero wrap">
+    <span class="eyebrow">Windows · .NET 10 · sin dependencias externas</span>
+    <h1>Sabe dónde se fue tu espacio.</h1>
+    <p class="lead">
+      <strong style="color:var(--ink)">Folder Size Aurora</strong> recorre cualquier carpeta o
+      unidad y te dice exactamente qué ocupa qué. Y no se queda ahí: vigila tus límites y te
+      avisa <em>antes</em> de que quedarte sin espacio sea tu problema.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="FolderSizeAurora.msi" download>
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v7.4M5.2 6.9 8 9.7l2.8-2.8M2.6 12.2v1.2h10.8v-1.2"/></svg>
+        Descargar Folder Size Aurora
+      </a>
+      <a class="btn btn-ghost" href="#empezar">Cómo se usa</a>
+    </div>
+    <p class="hint">Ejecutable standalone x64. Descarga directa, sin instalación.</p>
+
+    <div class="shot">
+      <img src="assets/app-explorador.png" alt="La ventana de Folder Size Aurora con el árbol de carpetas abierto, columnas de tamaño, uso del total, archivos, carpetas y modificado.">
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>926.909</b><span>archivos en una unidad real</span></div>
+      <div class="stat"><b>27 s</b><span>de principio a fin</span></div>
+      <div class="stat"><b>30 ms</b><span>peor bloqueo de la ventana</span></div>
+      <div class="stat"><b>0</b><span>dependencias externas</span></div>
+    </div>
+  </section>
+
+  <!-- ============ Qué hace ============ -->
+  <section class="band tint" id="pestanas">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Tres pestañas, un solo trabajo: saber qué ocupa el disco</h2>
+        <p>Medir, comparar y reaccionar. Sin menús escondidos ni wizards de ocho pasos.</p>
+      </div>
+      <div class="cards">
+
+        <article class="card">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M1.8 4.2h4.2L7.6 6.2h6.6v6.2H1.8z"/><path d="M1.8 4.2v-.4h4.2l1.6 2"/></svg></div>
+          <h3>Explorador</h3>
+          <p>
+            Un árbol con carpetas <em>y</em> archivos intercalados por tamaño, la barra de
+            proporción en cada fila y el porcentaje de uso. Filtra por tamaño, por tipo de
+            archivo o por nombre <strong>sin volver a escanear</strong>: filtra sobre clones y
+            el resultado original se conserva.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2.6 13.6V8.6M8 13.6V3.6M13.4 13.6v-3"/></svg></div>
+          <h3>Gráficos</h3>
+          <p>
+            Las diez carpetas más pesadas, los diez archivos más pesados y el reparto por tipo.
+            Las etiquetas llevan los tres últimos tramos de la ruta, porque con el nombre suelto
+            dos <code>win-x64</code> salen indistinguibles y el gráfico parece duplicado sin serlo.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="ico" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2a3.9 3.9 0 0 1 3.9 3.9v3.3l1.7 2.2H2.4l1.7-2.2V5.9A3.9 3.9 0 0 1 8 2Z"/><path d="M6.5 13.2a1.7 1.7 0 0 0 3 0"/></svg></div>
+          <h3>Vigilancia</h3>
+          <p>
+            La diferencia real frente a un simple medidor. Pon un límite a una carpeta o a una
+            unidad y, cuando se supera, te avisa por <strong>correo, webhook, sonido o dentro de
+            la propia aplicación</strong>. Con enfriamiento de 30 minutos para no repetir la misma
+            alerta cada cinco minutos.
+          </p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Rendimiento ============ -->
+  <section class="band" id="rapido">
+    <div class="wrap split">
+      <div>
+        <h2>La diferencia que no se ve hasta que la necesitas</h2>
+        <p>
+          Casi todos los analizadores de tamaño se cuelgan con las unidades grandes, y siempre
+          por la misma puerta de entrada: la ventana deja de responder mientras recorre el disco.
+        </p>
+        <p>
+          Folder Size Aurora hace el trabajo pesado <strong>fuera del hilo de la interfaz</strong>:
+          el escaneo del disco y el clonado del árbol para filtrar. A la ventana solo se le publica
+          el resultado ya construido. Además, la columna de modificación se acumula durante el
+          escaneo en lugar de recalcularse en cada repintado.
+        </p>
+        <p style="margin-bottom:0">
+          El resultado se mide con una sonda que cronometra cuánto tarda la interfaz en
+          responder. No es una opinión: es un número, y el número no crece con el tamaño del
+          árbol.
+        </p>
+      </div>
+      <div>
+        <table class="data">
+          <caption>Peor tiempo sin responder de la ventana, medido en la aplicación real</caption>
+          <thead>
+            <tr><th>Escenario</th><th style="text-align:right">Antes</th><th style="text-align:right">Ahora</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>26.571 archivos</td><td class="n">25 ms</td><td class="n gain">16 ms</td></tr>
+            <tr><td>154.834 archivos</td><td class="n">234 ms</td><td class="n gain">30 ms</td></tr>
+            <tr><td>Desplegar todo un árbol</td><td class="n">fila a fila</td><td class="n gain">29 ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Capturas ============ -->
+  <section class="band tint" id="capturas">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Esto es lo que ves</h2>
+        <p>Capturas reales de la aplicación en marcha, no maquetas.</p>
+      </div>
+      <div class="shots">
+        <figure>
+          <img src="assets/app-graficos.png" alt="Pestaña de gráficos con las carpetas más pesadas, los archivos más pesados y el reparto por tipo.">
+          <figcaption>Gráficos: las diez carpetas más pesadas y el reparto por tipo.</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/app-vigilancia.png" alt="Pestaña de vigilancia con reglas de límite, barras de uso, alertas y notificaciones.">
+          <figcaption>Vigilancia: reglas de límite, alertas y entregas por canal.</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/app-oscuro.png" alt="La aplicación en tema oscuro.">
+          <figcaption>Tema oscuro, con conmutación instantánea y sin reiniciar.</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/app-estrecho.png" alt="La ventana estrecha en 900 por 600 píxeles, con la barra superior y el pie de estado en su sitio.">
+          <figcaption>Ventana estrecha: el diseño baja hasta 900 px sin recortarse.</figcaption>
+        </figure>
+      </div>
+
+      <div class="detalle">
+        <figure>
+          <img src="assets/app-menu.png" alt="Menú contextual de una fila del árbol con abrir en el explorador, abrir en PowerShell, analizar, vigilar y copiar ruta.">
+        </figure>
+        <div>
+          <h3>Clic derecho en cualquier fila</h3>
+          <p>
+            Abrir la carpeta en el Explorador de Windows, abrir una terminal en ella, volver a
+            analizarla desde ahí, crearle una regla de vigilancia o copiar su ruta. En un archivo
+            el menú cambia solo y solo ofrece lo que tiene sentido: abrirlo, mostrarlo seleccionado
+            en el explorador o copiar su ruta.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Empezar ============ -->
+  <section class="band" id="empezar">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Empezar en tres pasos</h2>
+        <p>Instalador MSI para Windows. Descarga y ejecuta.</p>
+      </div>
+      <div class="steps">
+        <article class="step">
+          <h3>Descarga</h3>
+          <p>Haz clic en <strong>Descargar Folder Size Aurora</strong> y guarda el archivo MSI en tu equipo.</p>
+        </article>
+        <article class="step">
+          <h3>Instala</h3>
+          <p>Haz doble clic en <code>FolderSizeAurora.msi</code>. Sigue el asistente y acepta la instalación.</p>
+        </article>
+        <article class="step">
+          <h3>Explora</h3>
+          <p>Abre la aplicación desde el menú Inicio y selecciona una unidad o carpeta para analizar.</p>
+        </article>
+      </div>
+
+      <div class="sec-head" style="margin-top:46px">
+        <h3>Requisitos</h3>
+        <p>
+          Windows 10/11 (x64). <strong>Instalador MSI</strong> con .NET 10 incluido.
+          Instala en <code>C:\Program Files\Folder Size Aurora</code>, no requiere permisos de administrador adicionales y no envía telemetría.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Atajos ============ -->
+  <section class="band tint">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Atajos que ahorran tiempo</h2>
+        <p>Registrados en la ventana, así que funcionan estés donde estés.</p>
+      </div>
+      <div class="keys">
+        <kbd>Ctrl + O</kbd><kbd>Ctrl + R</kbd><kbd>Ctrl + B</kbd><kbd>Ctrl + D</kbd>
+        <kbd>Ctrl + E</kbd><kbd>Ctrl + L</kbd>
+      </div>
+      <p style="color:var(--ink2);margin-top:18px">
+        Elegir carpeta · repetir análisis · plegar el carril · cambiar de tema ·
+        desplegar todo · recoger todo.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ Preguntas ============ -->
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Preguntas frecuentes</h2>
+      </div>
+
+      <details>
+        <summary>¿Funciona sin conexión?</summary>
+        <p>Sí. Todo el análisis ocurre en tu equipo y no se envía nada a ninguna parte. Lo único que puede salir es el aviso que tú actives tú mismo: el correo o el webhook de la pestaña Vigilancia.</p>
+      </details>
+
+      <details>
+        <summary>¿Se cuelga con una unidad enorme?</summary>
+        <p>No. Sobre una unidad real de 293 GB con 926.909 archivos y 344.617 carpetas, el análisis tarda unos 27 segundos y la ventana responde en todo momento. Puedes seguir usando el ordenador mientras trabaja.</p>
+      </details>
+
+      <details>
+        <summary>¿Qué deja en mi equipo?</summary>
+        <p>Dos cosas y solo dos: los ajustes en <code>%APPDATA%\FolderSizeAurora\settings.json</code> y el registro de alertas en <code>%LOCALAPPDATA%\FolderSizeAurora\alertas.log</code>. Puedes borrar la carpeta y empieza de cero.</p>
+      </details>
+
+      <details>
+        <summary>¿Exporta los resultados?</summary>
+        <p>Sí, en tres formatos: CSV con BOM UTF-8 (se abre en Excel sin tocar los acentos), JSON con el árbol completo y metadatos, e informe de texto con los quince mayores y un resumen.</p>
+      </details>
+
+      <details>
+        <summary>¿Y si tengo una carpeta que no quiero medir?</summary>
+        <p>Marca la casilla <em>Incluir ocultos y del sistema</em> para ignorarlos. Los junctions, enlaces simbólicos y puntos de repetición se saltan siempre, así que los ciclos no cuelgan el escaneo.</p>
+      </details>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <img src="assets/logo.svg" alt="" width="22" height="22" style="border-radius:6px">
+    <span>Folder Size Aurora</span>
+    <span class="sp">Aplicación de escritorio en C# y WPF · .NET 10</span>
+  </div>
+</footer>
+
+</body>
+</html>

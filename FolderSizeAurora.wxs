@@ -1,0 +1,24 @@
+﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Folder Size Aurora" Language="1033" Version="1.0.0.0" Manufacturer="Folder Size Aurora LLC" UpgradeCode="{C1A4341F-2C89-4BC2-A3A7-19C4ED0C5A8C}" ProductCode="{B4E143A9-8C6E-4E67-93C0-423F8E0C5A6E}"><Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <UI>
+        <ui:WixUI Id="WixUI_Minimal" />
+    </UI>
+
+    
+
+    <Feature Id="ProductFeature" Title="Folder Size Aurora" Level="1">
+      <ComponentRef Id="FolderSizeAuroraExe" />
+    </Feature>
+  
+      <StandardDirectory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="Folder Size Aurora">
+          <Component Id="FolderSizeAuroraExe" Guid="{5D5A2B9B-490B-444D-B6C3-E0F547DF9C7F}">
+            <File Id="FolderSizeAuroraExecutable" Source="landing\FolderSizeAurora.exe" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </StandardDirectory>
+    </Package>
+</Wix>

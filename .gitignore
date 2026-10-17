@@ -1,0 +1,15 @@
+.vs/
+obj/
+bin/
+dist/
+*.exe
+*.pdb
+*.vsidx
+*.user
+*.suo
+*.log
+*.tmp
+.DS_Store
+Thumbs.db*.wixobj
+*.wixpdb
+FolderSizeAurora.wixobj

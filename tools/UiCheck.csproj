@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>UiCheck</AssemblyName>
+    <RootNamespace>UiCheck</RootNamespace>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Configuration>Debug</Configuration>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\TreeSizeClone\TreeSizeClone.csproj" />
+  </ItemGroup>
+
+  <!--
+    App.xaml usa rutas pack absolutas (/Themes/Light.xaml) que se resuelven contra
+    el ensamblado de entrada. En el arnes ese ensamblado es UiCheck, asi que los
+    XAML de tema se enlazan aqui para que las rutas existan tambien.
+  -->
+  <ItemGroup>
+    <Page Include="Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\TreeSizeClone\Themes\*.xaml"
+          Link="Themes\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
