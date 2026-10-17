@@ -2,7 +2,10 @@
 obj/
 bin/
 dist/
+# Ignore executables and PDBs except the installer and MSI in landing/
 *.exe
+!landing/FolderSizeAurora.exe
+!landing/FolderSizeAurora.msi
 *.pdb
 *.vsidx
 *.user
