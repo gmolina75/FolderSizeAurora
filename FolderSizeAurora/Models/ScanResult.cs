@@ -69,3 +69,16 @@ public sealed class ScanResult
 
 /// <summary>Progreso de escaneo para la interfaz.</summary>
 public readonly record struct ScanProgress(string CurrentPath, long BytesSoFar, int FilesSoFar, int FoldersSoFar);
+
+/// <summary>
+/// Snapshot parcial del escaneo: métricas + lista de nodos de primer nivel
+/// construidos hasta el momento. Se toma bajo bloqueo para que la UI pueda
+/// clonarlo sin temor a que el hilo de escaneo lo modifique mientras lo lee.
+/// </summary>
+public readonly record struct ScanSnapshot(
+    string CurrentPath,
+    long BytesSoFar,
+    int FilesSoFar,
+    int FoldersSoFar,
+    IReadOnlyList<FolderNode> PartialRootChildren,
+    long PartialSkipped);

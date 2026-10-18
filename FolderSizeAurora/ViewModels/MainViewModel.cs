@@ -741,12 +741,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            var progress = new Progress<ScanProgress>(p =>
+            var progress = new Progress<ScanSnapshot>(p =>
             {
                 ScannedBytes = p.BytesSoFar;
                 ScannedFiles = p.FilesSoFar;
                 ScannedFolders = p.FoldersSoFar;
                 StatusText = $"Analizando...  {Formatter.Bytes(p.BytesSoFar)} en {Formatter.Count(p.FilesSoFar)} archivos";
+
+                // Modo pre-scan: renderizar filas parciales con los hijos directos que ya se conocen
+                if (p.PartialRootChildren.Count > 0)
+                {
+                    UpdatePreScanRows(path, p);
+                }
             });
 
             // El recorrido del disco no puede tocar el hilo de la interfaz. Un
@@ -791,10 +797,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             StatusText = "Analisis cancelado.";
             Progress = 0;
+            // Si el usuario cancela a mitad de escaneo, la vista parcial no sirve:
+            // la limpiamos para que no quede un arbol a medias en pantalla.
+            _viewRoot = null;
+            _rebuildGeneration++;
+            Rows.ReplaceAll(Array.Empty<TreeRow>());
         }
         catch (Exception ex)
         {
             StatusText = "Error durante el analisis.";
+            _viewRoot = null;
+            _rebuildGeneration++;
+            Rows.ReplaceAll(Array.Empty<TreeRow>());
             Post(() =>
             {
                 var alert = new AlertItem(DateTime.Now, path ?? string.Empty, ex.Message, 0, 0, isError: true);
@@ -929,6 +943,47 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             StatusText = $"Error al preparar la vista: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Renderiza la vista parcial mientras el escaneo sigue en marcha: muestra los
+    /// hijos directos del root que ya se han descubierto, con sus tamaños parciales.
+    /// No usa filtros ni busqueda: la vista parcial es solo para que el usuario
+    /// vea que la aplicacion no esta congelada. Cuando termine el escaneo, RebuildView()
+    /// reemplaza esto con el arbol completo y filtrado.
+    /// </summary>
+    private void UpdatePreScanRows(string rootPath, ScanSnapshot snapshot)
+    {
+        var partial = new FolderNode(Path.GetFileName(rootPath) ?? rootPath, rootPath, isRoot: true);
+        partial.Size = snapshot.BytesSoFar;
+        partial.FileCount = snapshot.FilesSoFar;
+        partial.FolderCount = Math.Max(0, snapshot.FoldersSoFar - 1); // menos el root
+
+        // Clonar superficialmente los hijos directos: el escaneo sigue tocando
+        // los mismos nodos en el hilo de trabajo y la UI no puede ver una lista
+        // mientras se modifica. Los tamaños y archivos se copian en este instante.
+        foreach (var child in snapshot.PartialRootChildren)
+        {
+            var clone = new FolderNode(child.Name, child.FullPath)
+            {
+                Size = child.Size,
+                DirectSize = child.DirectSize,
+                FileCount = child.FileCount,
+                FolderCount = child.FolderCount,
+                LatestWriteTime = child.LatestWriteTime
+            };
+
+            clone.Files.AddRange(child.Files);
+            clone.Children.AddRange(child.Children);
+            partial.Children.Add(clone);
+        }
+
+        partial.RebuildItems(SortMode.Size);
+
+        _viewRoot = partial;
+        _rebuildGeneration++;
+        Rows.ReplaceAll(Array.Empty<TreeRow>());
+        RebuildRows();
     }
 
     private void RebuildRows()

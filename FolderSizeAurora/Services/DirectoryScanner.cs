@@ -21,7 +21,7 @@ public sealed class DirectoryScanner
     public async Task<ScanResult> ScanAsync(
         string rootPath,
         bool includeSystemHidden,
-        IProgress<ScanProgress>? progress,
+        IProgress<ScanSnapshot>? progress,
         CancellationToken cancellationToken)
     {
         var rootInfo = new DirectoryInfo(rootPath);
@@ -133,12 +133,20 @@ public sealed class DirectoryScanner
                 skipped++;
             }
 
-            // Reporte de progreso limitado a ~8 veces por segundo.
+            // Reporte de progreso limitado a ~4 veces por segundo para incluir snapshot de vista.
             var elapsedMs = stopwatch.ElapsedMilliseconds;
-            if (progress is not null && elapsedMs - lastReportMs >= 120)
+            if (progress is not null && elapsedMs - lastReportMs >= 250)
             {
                 lastReportMs = elapsedMs;
-                progress.Report(new ScanProgress(currentPath, totalBytes, (int)Math.Min(totalFiles, int.MaxValue), (int)Math.Min(totalFolders, int.MaxValue)));
+                // Clonar superficialmente los hijos directos del root para no causar concurrencia
+                var partialChildren = root.Children.ToArray();
+                progress.Report(new ScanSnapshot(
+                    currentPath,
+                    totalBytes,
+                    (int)Math.Min(totalFiles, int.MaxValue),
+                    (int)Math.Min(totalFolders, int.MaxValue),
+                    partialChildren,
+                    skipped));
                 await Task.Yield();
             }
         }
