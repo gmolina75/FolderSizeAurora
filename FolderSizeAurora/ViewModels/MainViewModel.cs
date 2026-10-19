@@ -86,6 +86,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private ScanResult? _result;
     private FolderNode? _viewRoot;
 
+    /// <summary>Raíz del escaneo original, para navegar sin re-escanear.</summary>
+    private FolderNode? _scanRoot;
+
+    /// <summary>Capa actual mostrada. Null = vista completa del escaneo.</summary>
+    private FolderNode? _currentNode;
+
+    /// <summary>Pila de navegación para el breadcrumb y volver atrás.</summary>
+    private readonly Stack<FolderNode> _navigationStack = new();
+
     private TreeRow? _selectedRow;
     private DriveItem? _selectedDrive;
     private MonitorRow? _selectedMonitor;
@@ -201,6 +210,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         WatchFolderCommand = new RelayCommand(p => WatchFolder(p as TreeRow), p => IsFolderRow(p));
         CopyPathCommand = new RelayCommand(p => CopyPath(p as TreeRow), p => RowPathOf(p) is not null);
         ToggleExportMenuCommand = new RelayCommand(() => IsExportMenuOpen = !IsExportMenuOpen);
+        NavigateIntoCommand = new RelayCommand(NavigateInto, p => p is TreeRow row && row.IsFolder && !IsScanning);
+        NavigateUpCommand = new RelayCommand(NavigateUp, () => CanNavigateUp);
 
         AddFolderRuleCommand = new RelayCommand(AddFolderRule, () => !IsScanning);
         AddDriveRuleCommand = new RelayCommand((object? p) => AddDriveRule(p as DriveItem), p => p is DriveItem);
@@ -287,6 +298,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand CollapseAllCommand { get; }
     public RelayCommand SortByCommand { get; }
     public RelayCommand ToggleExportMenuCommand { get; }
+    public RelayCommand NavigateIntoCommand { get; }
+    public RelayCommand NavigateUpCommand { get; }
     public RelayCommand AddFolderRuleCommand { get; }
     public RelayCommand AddDriveRuleCommand { get; }
     public RelayCommand RemoveRuleCommand { get; }
@@ -344,6 +357,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool HasResult => _result is not null;
+
+    /// <summary>Breadcrumb con el camino de navegación de capas.</summary>
+    public string Breadcrumb
+    {
+        get
+        {
+            if (_currentNode is null) return string.Empty;
+            var names = _navigationStack.Select(n => n.Name).ToList();
+            names.Add(_currentNode.Name);
+            return string.Join(" > ", names);
+        }
+    }
+
+    /// <summary>Permite subir a la capa superior si hay navegación activa.</summary>
+    public bool CanNavigateUp => _navigationStack.Count > 0 && _currentNode is not null;
 
     public string SearchText
     {
@@ -738,6 +766,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ScannedFiles = 0;
         ScannedFolders = 0;
         StatusText = $"Analizando {path}...";
+        // Resetear navegación de capas
+        _currentNode = null;
+        _navigationStack.Clear();
+        _scanRoot = null;
 
         try
         {
@@ -765,6 +797,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 token);
 
             _result = result;
+            _scanRoot = result.Root;
+            _navigationStack.Push(_scanRoot);
             // Anula cualquier vista que se estuviera calculando para el escaneo anterior.
             _rebuildGeneration++;
             CurrentPath = result.Root.FullPath;
@@ -859,7 +893,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (result is null) return;
 
         var generation = ++_rebuildGeneration;
-        var source = result.Root;
+        var source = _currentNode ?? result.Root;
         var minSize = MinSizeBytes;
         var filter = TypeFilter;
         var search = SearchText;
@@ -1004,6 +1038,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Rows.ReplaceAll(list);
 
         RefreshCommands();
+    }
+
+    private void NavigateInto(object? parameter)
+    {
+        if (parameter is not TreeRow { Folder: not null } row) return;
+        var node = row.Folder;
+        _navigationStack.Push(_currentNode ?? _scanRoot!);
+        _currentNode = node;
+        _rebuildGeneration++;
+        RebuildView();
+        Raise(nameof(Breadcrumb));
+        Raise(nameof(CanNavigateUp));
+    }
+
+    private void NavigateUp()
+    {
+        if (_currentNode is null || _navigationStack.Count == 0) return;
+        _currentNode = _navigationStack.Pop();
+        if (_currentNode == _scanRoot) _currentNode = null;
+        _rebuildGeneration++;
+        RebuildView();
+        Raise(nameof(Breadcrumb));
+        Raise(nameof(CanNavigateUp));
     }
 
     private int _rebuildGeneration;
