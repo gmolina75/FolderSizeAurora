@@ -78,6 +78,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly DriveService _drives = new();
     private readonly SizeMonitorService _monitor = new();
     private readonly NotificationService _notifications;
+    private readonly ScanStore _scanStore = new();
     private readonly HashSet<string> _expandedPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _searchTimer;
 
@@ -122,6 +123,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private int _monitorIntervalMinutes = 5;
     private string _scanSummary = "Sin analisis todavia.";
     private string _selectionTitle = "Sin seleccion";
+
+    // Historial de escaneos persistidos
+    private ObservableCollection<ScanHistoryItem> _scanHistory = new();
+    public ObservableCollection<ScanHistoryItem> ScanHistory => _scanHistory;
+
     private string _selectionMeta = "Pulsa una fila del arbol para ver su detalle.";
     private string _selectionPath = string.Empty;
     private AlertItem? _selectedAlert;
@@ -209,6 +215,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ScanFolderCommand = new AsyncRelayCommand(p => ScanAsync(RowPathOf(p)), p => !IsScanning);
         WatchFolderCommand = new RelayCommand(p => WatchFolder(p as TreeRow), p => IsFolderRow(p));
         CopyPathCommand = new RelayCommand(p => CopyPath(p as TreeRow), p => RowPathOf(p) is not null);
+        // Comandos para gráficos (reciben string path en Tooltip/Tag)
+        OpenChartItemPathCommand = new RelayCommand(p => OpenChartItemPath((string?)p), p => p is string s && !string.IsNullOrWhiteSpace(s));
+        CopyChartItemPathCommand = new RelayCommand(p => CopyChartItemPath((string?)p), p => p is string s && !string.IsNullOrWhiteSpace(s));
         ToggleExportMenuCommand = new RelayCommand(() => IsExportMenuOpen = !IsExportMenuOpen);
         NavigateIntoCommand = new RelayCommand(NavigateInto, p => p is TreeRow row && row.IsFolder && !IsScanning);
         NavigateUpCommand = new RelayCommand(NavigateUp, () => CanNavigateUp);
@@ -221,6 +230,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DismissToastCommand = new RelayCommand(() => Toast = null);
         SendTestNotificationCommand = new AsyncRelayCommand(SendTestNotificationAsync);
         OpenAlertLocationCommand = new RelayCommand(OpenAlertLocation, () => SelectedAlert?.Path is not null);
+
+        // Persistencia y comparación
+        LoadScanHistoryCommand = new RelayCommand(async () => await LoadScanHistoryAsync());
+        LoadScanFromHistoryCommand = new RelayCommand(async p => await LoadScanFromHistoryAsync(p as ScanHistoryItem), p => p is ScanHistoryItem);
+        CompareScansCommand = new RelayCommand(async p => await CompareScansAsync(p as ScanHistoryItem), p => p is ScanHistoryItem);
 
         _monitor.StatusesUpdated += statuses => Post(() => ApplyMonitorStatuses(statuses));
         _monitor.LimitExceeded += alert => Post(() => _ = HandleAlertAsync(alert));
@@ -294,6 +308,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand ScanFolderCommand { get; }
     public RelayCommand WatchFolderCommand { get; }
     public RelayCommand CopyPathCommand { get; }
+    public RelayCommand OpenChartItemPathCommand { get; }
+    public RelayCommand CopyChartItemPathCommand { get; }
     public RelayCommand ExpandAllCommand { get; }
     public RelayCommand CollapseAllCommand { get; }
     public RelayCommand SortByCommand { get; }
@@ -308,6 +324,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand DismissToastCommand { get; }
     public AsyncRelayCommand SendTestNotificationCommand { get; }
     public RelayCommand OpenAlertLocationCommand { get; }
+    public RelayCommand LoadScanHistoryCommand { get; }
+    public RelayCommand LoadScanFromHistoryCommand { get; }
+    public RelayCommand CompareScansCommand { get; }
 
     // ---------------------------------------------------------------- Estado
 
@@ -826,6 +845,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             });
 
             Persist();
+            // Guardar en historial persistido
+            _ = _scanStore.SaveAsync(result);
         }
         catch (OperationCanceledException)
         {
@@ -1065,6 +1086,169 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private int _rebuildGeneration;
 
+    // --- Persistencia y comparación de escaneos ---
+
+    private async Task LoadScanHistoryAsync()
+    {
+        try
+        {
+            var list = await _scanStore.ListAsync();
+            _scanHistory.Clear();
+            foreach (var item in list) _scanHistory.Add(item);
+            StatusText = $"Historial cargado: {list.Count} escaneos guardados.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error cargando historial: {ex.Message}";
+        }
+    }
+
+    private async Task LoadScanFromHistoryAsync(ScanHistoryItem? item)
+    {
+        if (item is null) return;
+        try
+        {
+            var root = await _scanStore.LoadRootAsync(item.Id);
+            if (root is null)
+            {
+                StatusText = "No se pudo cargar el escaneo seleccionado.";
+                return;
+            }
+
+            _result = new ScanResult(
+                root,
+                item.TotalBytes,
+                item.TotalFiles,
+                item.TotalFolders,
+                0,
+                TimeSpan.Zero,
+                Array.Empty<ChartItem>(),
+                Array.Empty<ChartItem>(),
+                Array.Empty<ChartItem>());
+
+            _scanRoot = root;
+            _navigationStack.Clear();
+            _navigationStack.Push(_scanRoot);
+            _currentNode = null;
+            _rebuildGeneration++;
+            _expandedPaths.Clear();
+
+            CurrentPath = root.FullPath;
+            _settings.LastPath = CurrentPath;
+
+            Post(() =>
+            {
+                TopFolders.Clear();
+                TopFiles.Clear();
+                ByExtension.Clear();
+                RebuildView();
+                Progress = 100;
+                UpdateScanSummary();
+                StatusText = $"Cargado del historial: {root.FullPath} ({item.DisplayTotal})";
+            });
+
+            Persist();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error cargando escaneo: {ex.Message}";
+        }
+    }
+
+    private async Task CompareScansAsync(ScanHistoryItem? item)
+    {
+        if (item is null) return;
+        try
+        {
+            var root = await _scanStore.LoadRootAsync(item.Id);
+            if (root is null)
+            {
+                StatusText = "No se pudo cargar el escaneo para comparar.";
+                return;
+            }
+
+            if (_scanRoot is null)
+            {
+                StatusText = "No hay escaneo actual para comparar.";
+                return;
+            }
+
+            var comparison = CompareTrees(root, _scanRoot, _scanRoot.FullPath);
+            var text = $"Comparación con escaneo del {item.DisplayDate}:\n\n{comparison}";
+            Post(() =>
+            {
+                var alert = new AlertItem(DateTime.Now, root.FullPath, text, 0, 0, isError: false);
+                Alerts.Insert(0, alert);
+                Toast = alert;
+            });
+            StatusText = "Comparación generada (ver alertas).";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error comparando: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Compara dos árboles y devuelve texto con diferencias de tamaño.
+    /// </summary>
+    private static string CompareTrees(FolderNode oldRoot, FolderNode newRoot, string basePath)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Base: {basePath}");
+        sb.AppendLine($"Escaneo anterior: {Formatter.Bytes(oldRoot.Size)}");
+        sb.AppendLine($"Escaneo actual:   {Formatter.Bytes(newRoot.Size)}");
+        sb.AppendLine($"Delta total:      {Formatter.Bytes(newRoot.Size - oldRoot.Size):+} ({newRoot.Size - oldRoot.Size:+0} bytes)");
+        sb.AppendLine();
+
+        var oldMap = BuildMap(oldRoot);
+        var newMap = BuildMap(newRoot);
+
+        var allPaths = new HashSet<string>(oldMap.Keys);
+        foreach (var p in newMap.Keys) allPaths.Add(p);
+
+        var changes = new List<(string Path, long OldSize, long NewSize, string Type)>();
+        foreach (var path in allPaths)
+        {
+            oldMap.TryGetValue(path, out var oldNode);
+            newMap.TryGetValue(path, out var newNode);
+
+            long oldSize = oldNode?.Size ?? 0;
+            long newSize = newNode?.Size ?? 0;
+
+            if (oldSize != newSize)
+            {
+                string type = oldNode is null ? "NUEVO" : newNode is null ? "BORRADO" : "CAMBIADO";
+                changes.Add((path, oldSize, newSize, type));
+            }
+        }
+
+        // Ordenar por delta absoluto descendente
+        changes = changes.OrderByDescending(c => Math.Abs(c.NewSize - c.OldSize)).Take(30).ToList();
+
+        sb.AppendLine("Top 30 cambios:");
+        foreach (var c in changes)
+        {
+            var delta = c.NewSize - c.OldSize;
+            var arrow = delta > 0 ? "▲" : "▼";
+            sb.AppendLine($"{arrow} {c.Path}  {Formatter.Bytes(c.OldSize)} -> {Formatter.Bytes(c.NewSize)}  ({delta:+0} bytes) [{c.Type}]");
+        }
+
+        return sb.ToString();
+    }
+
+    private static Dictionary<string, FolderNode> BuildMap(FolderNode root)
+    {
+        var map = new Dictionary<string, FolderNode>(StringComparer.OrdinalIgnoreCase);
+        void Walk(FolderNode n)
+        {
+            map[n.FullPath] = n;
+            foreach (var c in n.Children) Walk(c);
+        }
+        Walk(root);
+        return map;
+    }
+
     private void Flatten(FolderNode node, int depth, List<TreeRow> output, long total)
     {
         foreach (var item in node.Items)
@@ -1219,6 +1403,41 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         }
 
+        StatusText = $"No se pudo copiar la ruta: {lastError}";
+    }
+
+    private void OpenChartItemPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            Launch("explorer.exe", $"\"{path}\"");
+            StatusText = $"Abierto: {path}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"No se pudo abrir: {ex.Message}";
+        }
+    }
+
+    private void CopyChartItemPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        var lastError = "el portapapeles no respondio";
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetText(path);
+                StatusText = $"Ruta copiada: {path}";
+                return;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex.Message;
+                if (attempt < 2) Thread.Sleep(40);
+            }
+        }
         StatusText = $"No se pudo copiar la ruta: {lastError}";
     }
 
