@@ -60,7 +60,7 @@ public sealed class SizeMonitorService : IDisposable
     public void Configure(IEnumerable<MonitorTarget> targets, int intervalMinutes, bool enabled)
     {
         Targets = targets?.ToList() ?? new List<MonitorTarget>();
-        if (enabled) Start(intervalMinutes);
+        if (enabled && Targets.Count > 0) Start(intervalMinutes);
         else Stop();
     }
 

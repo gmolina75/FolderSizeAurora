@@ -58,6 +58,11 @@ public sealed class AppSettings
     public string WebhookUrl { get; set; } = string.Empty;
 
     public List<MonitorRule> MonitorRules { get; set; } = new();
+
+    // System tray / startup
+    public bool MinimizeToTray { get; set; } = true;
+    public bool StartWithWindows { get; set; }
+    public bool CheckForUpdates { get; set; } = true;
 }
 
 /// <summary>Regla serializable (independiente del MonitorTarget en memoria).</summary>

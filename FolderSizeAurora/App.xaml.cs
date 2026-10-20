@@ -1,6 +1,12 @@
 using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using FolderSizeAurora.Models;
+using FolderSizeAurora.Services;
+using FolderSizeAurora.ViewModels;
 
 namespace FolderSizeAurora;
 
@@ -19,9 +25,86 @@ public partial class App : Application
         if (e.Args.Length > 0 && e.Args[0].StartsWith($"{ProtocolScheme}://"))
         {
             HandleProtocolActivation(e.Args[0]);
+            base.OnStartup(e);
+            return;
+        }
+
+        // CLI: si hay argumentos que no son protocolo, ejecutar en modo headless
+        if (e.Args.Length > 0 && !e.Args[0].StartsWith($"{ProtocolScheme}://"))
+        {
+            RunCliAsync(e.Args).ConfigureAwait(false);
+            Shutdown();
+            return;
         }
 
         base.OnStartup(e);
+    }
+
+    private static async Task RunCliAsync(string[] args)
+    {
+        try
+        {
+            var scanner = new DirectoryScanner();
+            var progress = new Progress<ScanSnapshot>();
+
+            // Parse simple: foldersizeaurora scan "C:\path" --csv out.csv
+            if (args.Length >= 2 && args[0].Equals("scan", StringComparison.OrdinalIgnoreCase))
+            {
+                var path = args[1].Trim('"');
+                if (!Directory.Exists(path))
+                {
+                    Console.Error.WriteLine($"Ruta no encontrada: {path}");
+                    return;
+                }
+
+                Console.WriteLine($"Escaneando: {path}");
+                var result = await scanner.ScanAsync(path, false, progress, CancellationToken.None);
+
+                Console.WriteLine($"Archivos: {result.TotalFiles}, Carpetas: {result.TotalFolders}, Tamaño: {Formatter.Bytes(result.TotalBytes)}");
+
+                // Buscar opciones de exportación
+                string? csvPath = null;
+                string? jsonPath = null;
+                string? reportPath = null;
+
+                for (int i = 2; i < args.Length; i++)
+                {
+                    if (args[i].Equals("--csv", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                        csvPath = args[++i];
+                    else if (args[i].Equals("--json", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                        jsonPath = args[++i];
+                    else if (args[i].Equals("--report", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                        reportPath = args[++i];
+                }
+
+                var exportService = new ExportService(result.Root, result.TotalBytes);
+
+                if (csvPath is not null)
+                {
+                    exportService.ExportCsv(csvPath);
+                    Console.WriteLine($"CSV exportado a: {csvPath}");
+                }
+                if (jsonPath is not null)
+                {
+                    exportService.ExportJson(jsonPath);
+                    Console.WriteLine($"JSON exportado a: {jsonPath}");
+                }
+                if (reportPath is not null)
+                {
+                    exportService.ExportReport(reportPath);
+                    Console.WriteLine($"Reporte exportado a: {reportPath}");
+                }
+
+                return;
+            }
+
+            Console.WriteLine("Folder Size Aurora CLI");
+            Console.WriteLine("Uso: FolderSizeAurora scan \"<ruta>\" [--csv <archivo>] [--json <archivo>] [--report <archivo>]");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+        }
     }
 
     private static void RegisterProtocol()

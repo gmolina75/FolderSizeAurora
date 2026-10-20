@@ -40,15 +40,16 @@ public static class Formatter
         int unitIndex = 0;
         var multipliers = new[] { 1L, 1024L, 1024L * 1024, 1024L * 1024 * 1024, 1024L * 1024 * 1024 * 1024, 1024L * 1024 * 1024 * 1024 * 1024 };
 
-        foreach (var unit in Units)
+        // Units[0] = "bytes", Units[1] = "KB", etc.
+        for (int i = 1; i < Units.Length; i++)
         {
-            if (unit == "bytes") continue;
+            var unit = Units[i];
             if (cleaned.EndsWith(unit, StringComparison.Ordinal))
             {
                 cleaned = cleaned[..^unit.Length];
+                unitIndex = i;
                 break;
             }
-            unitIndex++;
         }
 
         if (unitIndex >= multipliers.Length) unitIndex = multipliers.Length - 1;

@@ -80,10 +80,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly SizeMonitorService _monitor = new();
     private readonly NotificationService _notifications;
     private readonly ScanStore _scanStore = new();
+    private readonly UpdateService _updateService;
     private readonly HashSet<string> _expandedPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _searchTimer;
 
     private AppSettings _settings;
+    public AppSettings Settings => _settings;
     private CancellationTokenSource? _cts;
     private ScanResult? _result;
     private FolderNode? _viewRoot;
@@ -142,6 +144,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _settings = _settingsService.Load();
         _notifications = new NotificationService(_settings, (msg, _) => Post(() => StatusText = msg));
+        _updateService = new UpdateService(msg => Post(() => StatusText = msg));
+
+        // Aplicar configuración de inicio con Windows al arrancar
+        SetStartupRegistry(_settings.StartWithWindows);
 
         _searchTimer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(220),
@@ -250,6 +256,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         RestoreSettings();
         RefreshDrives();
+
+        // Chequeo silencioso de actualizaciones en segundo plano
+        _ = Task.Run(async () => await _updateService.CheckAsync());
     }
 
     // ---------------------------------------------------------------- Colecciones
@@ -806,6 +815,69 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _settings.NotifyWebhook;
         set { if (_settings.NotifyWebhook != value) { _settings.NotifyWebhook = value; Persist(); Raise(nameof(WebhookEnabled)); } }
+    }
+
+    public bool MinimizeToTray
+    {
+        get => _settings.MinimizeToTray;
+        set
+        {
+            if (_settings.MinimizeToTray != value)
+            {
+                _settings.MinimizeToTray = value;
+                Persist();
+                _trayService?.UpdateVisibility();
+            }
+        }
+    }
+
+    public bool StartWithWindows
+    {
+        get => _settings.StartWithWindows;
+        set
+        {
+            if (_settings.StartWithWindows != value)
+            {
+                _settings.StartWithWindows = value;
+                Persist();
+                SetStartupRegistry(value);
+            }
+        }
+    }
+
+    public bool CheckForUpdates
+    {
+        get => _settings.CheckForUpdates;
+        set
+        {
+            if (_settings.CheckForUpdates != value)
+            {
+                _settings.CheckForUpdates = value;
+                Persist();
+            }
+        }
+    }
+
+    // Referencia al tray service para actualizar visibilidad
+    private TrayService? _trayService;
+    internal void SetTrayService(TrayService trayService) => _trayService = trayService;
+
+    private static void SetStartupRegistry(bool enable)
+    {
+        try
+        {
+            var exePath = Environment.ProcessPath ?? "";
+            var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", true);
+            if (enable)
+            {
+                runKey?.SetValue("FolderSizeAurora", $"\"{exePath}\"");
+            }
+            else
+            {
+                runKey?.DeleteValue("FolderSizeAurora", false);
+            }
+        }
+        catch { }
     }
 
     public bool EmailEnabled => NotifyEmail;

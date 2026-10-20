@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using FolderSizeAurora.Helpers;
 using FolderSizeAurora.Models;
+using FolderSizeAurora.Services;
 using FolderSizeAurora.ViewModels;
 
 namespace FolderSizeAurora;
@@ -16,6 +17,7 @@ namespace FolderSizeAurora;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly TrayService _trayService;
 
     /// <summary>DependencyProperty que enlaza WindowStyle/WindowState con el ViewModel.</summary>
     public static readonly DependencyProperty IsPresentationModeProperty =
@@ -45,6 +47,16 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
 
         InitializeComponent();
+
+        // Inicializar system tray service
+        _trayService = new TrayService(
+            this,
+            _viewModel.Settings,
+            () => ShowWindow(),
+            () => Application.Current.Shutdown());
+
+        // Conectar tray service al ViewModel para actualizaciones de visibilidad
+        _viewModel.SetTrayService(_trayService);
 
         // ScrollChanged llega por burbuja desde el ScrollViewer interno del listado.
         Tree.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnTreeScrollChanged));
@@ -107,7 +119,21 @@ public partial class MainWindow : Window
 
         Loaded += OnLoaded;
         SizeChanged += (_, _) => SyncHeaderGutter(null);
-        Closed += (_, _) => _viewModel.Dispose();
+        Closed += (_, _) =>
+        {
+            _viewModel.Dispose();
+            _trayService.Dispose();
+        };
+    }
+
+    private void ShowWindow()
+    {
+        if (!IsVisible)
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
     }
 
     /// <summary>
