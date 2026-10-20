@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using FolderSizeAurora.Helpers;
 using FolderSizeAurora.Models;
@@ -107,6 +108,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _isDark;
     private bool _isScanning;
     private bool _isSidebarCollapsed;
+    private bool _isTopmost;
+    private bool _isPresentationMode;
+    private bool _isCompact;
+    private bool _isKioskMode;
     private string _statusText = "Listo. Elige una carpeta o pulsa Escanear en una unidad.";
     private string _currentPath = string.Empty;
     private string _searchText = string.Empty;
@@ -194,6 +199,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ExportJsonCommand = new RelayCommand((Action)(() => Export("json")), () => _result is not null);
         ExportReportCommand = new RelayCommand((Action)(() => Export("report")), () => _result is not null);
         ToggleThemeCommand = new RelayCommand(ToggleTheme);
+        ToggleTopmostCommand = new RelayCommand(() => IsTopmost = !IsTopmost);
+        TogglePresentationModeCommand = new RelayCommand(TogglePresentationMode);
+        ToggleCompactCommand = new RelayCommand(ToggleCompact);
+        ToggleKioskModeCommand = new RelayCommand(ToggleKioskMode);
         ResetFiltersCommand = new RelayCommand(ResetFilters);
         RefreshDrivesCommand = new RelayCommand(RefreshDrives);
         ToggleSidebarCommand = new RelayCommand(_ => IsSidebarCollapsed = !IsSidebarCollapsed);
@@ -296,6 +305,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ExportJsonCommand { get; }
     public RelayCommand ExportReportCommand { get; }
     public RelayCommand ToggleThemeCommand { get; }
+    public RelayCommand ToggleTopmostCommand { get; }
+    public RelayCommand TogglePresentationModeCommand { get; }
+    public RelayCommand ToggleCompactCommand { get; }
+    public RelayCommand ToggleKioskModeCommand { get; }
     public RelayCommand ResetFiltersCommand { get; }
     public RelayCommand RefreshDrivesCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
@@ -347,6 +360,45 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _isSidebarCollapsed, value);
     }
 
+    /// <summary>Filas compactas: menos alto por fila, cabe mas informacion en pantalla.</summary>
+    public bool IsCompact
+    {
+        get => _isCompact;
+        set
+        {
+            if (!SetProperty(ref _isCompact, value)) return;
+            _settings.CompactRows = value;
+            Persist();
+        }
+    }
+
+    /// <summary>Modo kiosko: pantalla completa sin chrome, sin atajos de salida.</summary>
+    public bool IsKioskMode
+    {
+        get => _isKioskMode;
+        set
+        {
+            if (!SetProperty(ref _isKioskMode, value)) return;
+            _settings.KioskMode = value;
+            Persist();
+            ApplyKioskMode(value);
+        }
+    }
+
+    /// <summary>Ventana siempre encima (modo flotante).</summary>
+    public bool IsTopmost
+    {
+        get => _isTopmost;
+        set => SetProperty(ref _isTopmost, value);
+    }
+
+    /// <summary>Modo presentación: pantalla completa sin bordes.</summary>
+    public bool IsPresentationMode
+    {
+        get => _isPresentationMode;
+        set => SetProperty(ref _isPresentationMode, value);
+    }
+
     public bool IsScanning
     {
         get => _isScanning;
@@ -355,6 +407,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (!SetProperty(ref _isScanning, value)) return;
             UpdateScanSummary();
             RefreshCommands();
+            UpdateTaskbarProgressState();
         }
     }
 
@@ -376,6 +429,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool HasResult => _result is not null;
+
+    /// <summary>True cuando la app está en reposo: sin escaneo y sin resultado.</summary>
+    public bool IsIdle => !IsScanning && _result is null;
 
     /// <summary>Breadcrumb con el camino de navegación de capas.</summary>
     public string Breadcrumb
@@ -420,7 +476,82 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public double Progress
     {
         get => _progress;
-        private set => SetProperty(ref _progress, value);
+        private set
+        {
+            if (!SetProperty(ref _progress, value)) return;
+            UpdateTaskbarProgressState();
+        }
+    }
+
+    public TaskbarItemProgressState TaskbarProgressState
+    {
+        get => _taskbarProgressState;
+        private set => SetProperty(ref _taskbarProgressState, value);
+    }
+    private TaskbarItemProgressState _taskbarProgressState = TaskbarItemProgressState.None;
+
+    /// <summary>Overlay para badge en taskbar (alertas activas).</summary>
+    public System.Windows.Media.ImageSource? TaskbarOverlay
+    {
+        get => _taskbarOverlay;
+        private set => SetProperty(ref _taskbarOverlay, value);
+    }
+    private System.Windows.Media.ImageSource? _taskbarOverlay;
+
+    private void UpdateTaskbarProgressState()
+    {
+        if (!IsScanning)
+        {
+            TaskbarProgressState = TaskbarItemProgressState.None;
+        }
+        else if (Progress >= 100)
+        {
+            TaskbarProgressState = TaskbarItemProgressState.Normal;
+        }
+        else
+        {
+            // Progreso indeterminado mientras se escanea (no sabemos el total hasta el final)
+            TaskbarProgressState = TaskbarItemProgressState.Indeterminate;
+        }
+    }
+
+    private void UpdateTaskbarOverlay()
+    {
+        // Mostrar badge con número de alertas no leídas
+        var unreadCount = Alerts.Count(a => !a.IsRead);
+        if (unreadCount > 0)
+        {
+            // Crear una imagen simple con el número
+            var drawingVisual = new System.Windows.Media.DrawingVisual();
+            using (var ctx = drawingVisual.RenderOpen())
+            {
+                var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Red);
+                var text = unreadCount > 99 ? "99+" : unreadCount.ToString();
+                var typeface = new System.Windows.Media.Typeface("Segoe UI");
+                var formattedText = new System.Windows.Media.FormattedText(
+                    text,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    System.Windows.FlowDirection.LeftToRight,
+                    typeface,
+                    12,
+                    System.Windows.Media.Brushes.White,
+                    1.0);
+                
+                var size = new System.Windows.Size(text.Length * 8 + 8, 18);
+                ctx.DrawRoundedRectangle(brush, null, new System.Windows.Rect(0, 0, size.Width, size.Height), 9, 9);
+                ctx.DrawText(formattedText, new System.Windows.Point(4, 0));
+            }
+            var renderTarget = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                (int)Math.Ceiling(drawingVisual.ContentBounds.Width),
+                (int)Math.Ceiling(drawingVisual.ContentBounds.Height),
+                96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            renderTarget.Render(drawingVisual);
+            TaskbarOverlay = renderTarget;
+        }
+        else
+        {
+            TaskbarOverlay = null;
+        }
     }
 
     /// <summary>
@@ -816,6 +947,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 token);
 
             _result = result;
+            Raise(nameof(IsIdle));
             _scanRoot = result.Root;
             _navigationStack.Push(_scanRoot);
             // Anula cualquier vista que se estuviera calculando para el escaneo anterior.
@@ -874,6 +1006,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         finally
         {
             IsScanning = false;
+            Raise(nameof(IsIdle));
         }
     }
 
@@ -1126,6 +1259,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Array.Empty<ChartItem>(),
                 Array.Empty<ChartItem>());
 
+            Raise(nameof(IsIdle));
             _scanRoot = root;
             _navigationStack.Clear();
             _navigationStack.Push(_scanRoot);
@@ -1587,12 +1721,44 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void RefreshMonitorNow() => _monitor.CheckNow();
 
+    /// <summary>Silencia alertas para una ruta específica por el tiempo indicado.</summary>
+    public void SnoozeRule(string path, TimeSpan duration)
+    {
+        var rule = MonitorRows.FirstOrDefault(r => r.Target.Path == path)?.Target;
+        if (rule != null)
+        {
+            rule.SnoozeUntilUtc = DateTime.UtcNow.Add(duration);
+            Persist();
+            StatusText = $"Alertas silenciadas para {Path.GetFileName(path)} por {duration.TotalHours}h.";
+        }
+    }
+
+    /// <summary>Navega a una ruta (para protocolo toast).</summary>
+    public void BrowsePath(string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+        {
+            _ = ScanAsync(path);
+        }
+    }
+
     private async Task HandleAlertAsync(AlertItem alert)
     {
+        // Verificar si la regla está silenciada
+        var rule = MonitorRows.FirstOrDefault(r => r.Target.Path == alert.Path)?.Target;
+        if (rule?.SnoozeUntilUtc is DateTime snooze && snooze > DateTime.UtcNow)
+        {
+            // Silenciado: solo registrar en historial, no mostrar toast
+            Alerts.Insert(0, alert);
+            while (Alerts.Count > 200) Alerts.RemoveAt(Alerts.Count - 1);
+            return;
+        }
+
         Alerts.Insert(0, alert);
         while (Alerts.Count > 200) Alerts.RemoveAt(Alerts.Count - 1);
 
         Toast = alert;
+        UpdateTaskbarOverlay();
 
         var results = await _notifications.SendAsync(alert);
 
@@ -1710,6 +1876,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void RestoreSettings()
     {
         _isDark = _settings.DarkTheme;
+        _isCompact = _settings.CompactRows;
+        _isKioskMode = _settings.KioskMode;
         _minSizeBytes = _settings.MinSizeBytes;
         _typeFilter = _settings.TypeFilter;
         _sortMode = _settings.SortMode;
@@ -1727,7 +1895,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ApplyMonitorConfiguration();
 
         Raise(
-            nameof(IsDark), nameof(IsSidebarCollapsed), nameof(MinSizeBytes), nameof(MinSizeOption),
+            nameof(IsDark), nameof(IsCompact), nameof(IsKioskMode), nameof(IsSidebarCollapsed), nameof(MinSizeBytes), nameof(MinSizeOption),
             nameof(TypeFilter), nameof(TypeFilterOption),
             nameof(SortMode), nameof(SortModeOption), nameof(SortIndicator), nameof(SortAscending),
             nameof(IncludeSystemHidden), nameof(ScanSummary),
@@ -1742,6 +1910,48 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         IsDark = !IsDark;
         StatusText = IsDark ? "Tema oscuro." : "Tema claro.";
+    }
+
+    private void TogglePresentationMode()
+    {
+        IsPresentationMode = !IsPresentationMode;
+        if (IsPresentationMode)
+        {
+            StatusText = "Modo presentacion activado (Esc para salir).";
+        }
+        else
+        {
+            StatusText = "Modo presentacion desactivado.";
+        }
+    }
+
+    private void ToggleCompact()
+    {
+        IsCompact = !IsCompact;
+        StatusText = IsCompact ? "Modo compacto activado." : "Modo compacto desactivado.";
+    }
+
+    private void ToggleKioskMode()
+    {
+        IsKioskMode = !IsKioskMode;
+    }
+
+    private void ApplyKioskMode(bool enable)
+    {
+        if (enable)
+        {
+            // Entrar en kiosko: activar presentación + ocultar UI
+            IsPresentationMode = true;
+            IsSidebarCollapsed = true;
+            StatusText = "Modo kiosko activado (Ctrl+Shift+K para salir).";
+        }
+        else
+        {
+            // Salir de kiosko: desactivar presentación + restaurar UI
+            IsPresentationMode = false;
+            IsSidebarCollapsed = false;
+            StatusText = "Modo kiosko desactivado.";
+        }
     }
 
     private void Persist() => _settingsService.Save(_settings);

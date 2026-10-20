@@ -25,6 +25,7 @@
             <conv:FlagBrushConverter x:Key="FlagBrush" />
             <conv:CountToVisibilityConverter x:Key="CountToVis" />
             <conv:EnumToVisibilityConverter x:Key="EnumToVis" />
+            <conv:ProgressToTaskbarConverter x:Key="ProgressToTaskbar" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

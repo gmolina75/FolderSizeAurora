@@ -7,6 +7,7 @@ using System.Net.Mail;
 using System.Text;
 using System.Threading.Tasks;
 using FolderSizeAurora.Models;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace FolderSizeAurora.Services;
 
@@ -46,6 +47,9 @@ public sealed class NotificationService
             results.Add(Sound());
         }
 
+        // Toast nativo Windows (independiente de NotifyInApp)
+        results.Add(ShowNativeToast(alert));
+
         if (_settings.NotifyEmail)
         {
             results.Add(await SendEmailAsync(alert));
@@ -73,6 +77,55 @@ public sealed class NotificationService
         catch (Exception ex)
         {
             return new NotificationResult("Sonido", false, ex.Message);
+        }
+    }
+
+    private NotificationResult ShowNativeToast(AlertItem alert)
+    {
+        try
+        {
+            var folderName = Path.GetFileName(alert.Path.TrimEnd('\\'));
+            var usagePercent = alert.LimitBytes > 0 ? (double)alert.CurrentBytes / alert.LimitBytes * 100 : 0;
+
+            // Crear toast con acciones
+            var toastContent = new ToastContentBuilder()
+                .AddArgument("action", "openFolder")
+                .AddArgument("path", alert.Path)
+                .AddText($"Folder Size Aurora - Límite superado", hintStyle: AdaptiveTextStyle.Subtitle)
+                .AddText($"{folderName}: {Formatter.Bytes(alert.CurrentBytes)} / {Formatter.Bytes(alert.LimitBytes)} ({usagePercent:F1}%)")
+                .AddButton(new ToastButton()
+                    .SetContent("Abrir carpeta")
+                    .AddArgument("action", "openFolder")
+                    .AddArgument("path", alert.Path))
+                .AddButton(new ToastButton()
+                    .SetContent("Silenciar 1h")
+                    .AddArgument("action", "snooze1h")
+                    .AddArgument("path", alert.Path))
+                .AddButton(new ToastButton()
+                    .SetContent("Silenciar 24h")
+                    .AddArgument("action", "snooze24h")
+                    .AddArgument("path", alert.Path));
+
+            // Urgencia según porcentaje
+            if (usagePercent >= 100)
+            {
+                toastContent.AddHeader("FolderSizeAurora", "urgent", "Límite crítico");
+            }
+
+            toastContent.Show(toast =>
+            {
+                toast.Tag = alert.Path; // Agrupar por carpeta
+                toast.Group = "FolderSizeAurora.Limits";
+                toast.ExpirationTime = DateTimeOffset.Now.AddHours(24);
+                toast.SuppressPopup = false;
+            });
+
+            return Ok("Toast nativo");
+        }
+        catch (Exception ex)
+        {
+            _trace($"Toast nativo: {ex.Message}", true);
+            return new NotificationResult("Toast nativo", false, ex.Message);
         }
     }
 

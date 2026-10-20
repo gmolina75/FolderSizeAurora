@@ -39,6 +39,9 @@ public sealed class MonitorTarget
 
     public MonitorLimitMode Mode { get; }
 
+    /// <summary>Hasta cuándo silenciar alertas para esta regla (UTC). null = sin silenciar.</summary>
+    public DateTime? SnoozeUntilUtc { get; set; }
+
     public string DisplayLimit => Mode == MonitorLimitMode.Bytes
         ? Formatter.Bytes(LimitBytes)
         : $"{LimitBytes:0} %";
@@ -69,6 +72,7 @@ public sealed class AlertItem
     public long CurrentBytes { get; }
     public long LimitBytes { get; }
     public bool IsError { get; }
+    public bool IsRead { get; set; }
 
     public string Time => Timestamp.ToString("HH:mm:ss");
     public string Date => Timestamp.ToString("dd/MM/yyyy HH:mm:ss");

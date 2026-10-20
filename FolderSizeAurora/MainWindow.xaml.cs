@@ -1,6 +1,8 @@
 using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -14,6 +16,14 @@ namespace FolderSizeAurora;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+
+    /// <summary>DependencyProperty que enlaza WindowStyle/WindowState con el ViewModel.</summary>
+    public static readonly DependencyProperty IsPresentationModeProperty =
+        DependencyProperty.Register(
+            "IsPresentationMode",
+            typeof(bool),
+            typeof(MainWindow),
+            new PropertyMetadata(false, OnIsPresentationModeChanged));
 
     /// <summary>Medida deseada en una pantalla holgada; nunca se impone si no cabe.</summary>
     public const double PreferredWidth = 1320;
@@ -39,6 +49,13 @@ public partial class MainWindow : Window
         // ScrollChanged llega por burbuja desde el ScrollViewer interno del listado.
         Tree.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnTreeScrollChanged));
         Tree.PreviewMouseRightButtonDown += OnTreeRightButtonDown;
+
+        // El binding bidireccional sincroniza WindowStyle/WindowState del Window
+        // con IsPresentationMode del ViewModel. Se registra despues de
+        // InitializeComponent porque las propiedades de ventana necesitan el HWND.
+        var binding = new Binding(nameof(MainViewModel.IsPresentationMode)) { Mode = BindingMode.TwoWay };
+        SetBinding(IsPresentationModeProperty, binding);
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         // La seleccion de fila va por binding; los atajos de teclado se registran
         // aqui porque un KeyBinding no hereda el DataContext de la ventana.
@@ -72,6 +89,21 @@ public partial class MainWindow : Window
             Gesture = new KeyGesture(Key.L, ModifierKeys.Control),
             Command = _viewModel.CollapseAllCommand
         });
+        InputBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.F11),
+            Command = _viewModel.TogglePresentationModeCommand
+        });
+        InputBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.T, ModifierKeys.Control),
+            Command = _viewModel.ToggleTopmostCommand
+        });
+        InputBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.K, ModifierKeys.Control | ModifierKeys.Shift),
+            Command = _viewModel.ToggleKioskModeCommand
+        });
 
         Loaded += OnLoaded;
         SizeChanged += (_, _) => SyncHeaderGutter(null);
@@ -91,6 +123,35 @@ public partial class MainWindow : Window
             PreferredHeight,
             PreferredMinWidth,
             PreferredMinHeight);
+
+    /// <summary>
+    /// En modo presentacion, la ventana pierde bordes y se maximiza.
+    /// Al salir, vuelve al estado normal con bordes.
+    /// </summary>
+    private static void OnIsPresentationModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not MainWindow window) return;
+
+        if (e.NewValue is true)
+        {
+            window.WindowStyle = WindowStyle.None;
+            window.WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            window.WindowStyle = WindowStyle.SingleBorderWindow;
+            window.WindowState = WindowState.Normal;
+            window.ApplyWorkAreaPlacement();
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.IsPresentationMode))
+        {
+            SetValue(IsPresentationModeProperty, _viewModel.IsPresentationMode);
+        }
+    }
 
     /// <summary>
     /// Se ajusta antes del primer dibujado: OnSourceInitialized ocurre con el

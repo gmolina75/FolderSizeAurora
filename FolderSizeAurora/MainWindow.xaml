@@ -1,6 +1,7 @@
 <Window x:Class="FolderSizeAurora.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Folder Size Aurora"
         SizeToContent="Manual"
         ResizeMode="CanResize"
@@ -8,7 +9,15 @@
         Background="{DynamicResource Bg.Ground}"
         TextOptions.TextFormattingMode="Ideal"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        Topmost="{Binding IsTopmost, Mode=TwoWay}">
+
+    <Window.TaskbarItemInfo>
+        <shell:TaskbarItemInfo 
+            ProgressValue="{Binding Progress, Mode=OneWay, Converter={StaticResource ProgressToTaskbar}}"
+            ProgressState="{Binding TaskbarProgressState, Mode=OneWay}"
+            Overlay="{Binding TaskbarOverlay, Mode=OneWay}" />
+    </Window.TaskbarItemInfo>
 
     <Window.Resources>
 
@@ -25,7 +34,7 @@
             separador de las acciones de carpeta tambien: si no, en un archivo
             quedarian dos separadores seguidos al final.
         -->
-        <ContextMenu x:Key="RowMenu" Opened="RowMenuOpened">
+        <ContextMenu x:Key="RowMenu" Opened="RowMenuOpened" x:Shared="False">
             <MenuItem Header="Abrir en el Explorador de archivos"
                       Command="{Binding OpenFolderInExplorerCommand}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -224,7 +233,8 @@
         <Border Grid.Row="0"
                 Background="{DynamicResource Bg.Panel}"
                 BorderBrush="{DynamicResource Rule.Hair}"
-                BorderThickness="0,0,0,1">
+                BorderThickness="0,0,0,1"
+                Visibility="{Binding IsKioskMode, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">
             <Grid Height="48" Margin="10,0,12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -291,6 +301,46 @@
                                   Visibility="{Binding IsDark, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
                             <Path Data="{StaticResource Geo.Moon}" Style="{StaticResource Ico}"
                                   Visibility="{Binding IsDark, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource Btn.Ico}" Command="{Binding ToggleTopmostCommand}"
+                            ToolTip="Mantener la ventana siempre encima">
+                        <Grid>
+                            <Path Data="{StaticResource Geo.Pin}" Style="{StaticResource Ico}"
+                                  Visibility="{Binding IsTopmost, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+                            <Path Data="{StaticResource Geo.Pin}" Style="{StaticResource Ico.Fill}"
+                                  Visibility="{Binding IsTopmost, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource Btn.Ico}" Command="{Binding TogglePresentationModeCommand}"
+                            ToolTip="Modo presentacion: pantalla completa sin bordes">
+                        <Grid>
+                            <Path Data="{StaticResource Geo.Present}" Style="{StaticResource Ico}"
+                                  Visibility="{Binding IsPresentationMode, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+                            <Path Data="{StaticResource Geo.Present}" Style="{StaticResource Ico.Fill}"
+                                  Visibility="{Binding IsPresentationMode, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource Btn.Ico}" Command="{Binding ToggleCompactCommand}"
+                            ToolTip="Modo compacto: filas mas densas">
+                        <Grid>
+                            <Path Data="{StaticResource Geo.Compact}" Style="{StaticResource Ico}"
+                                  Visibility="{Binding IsCompact, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+                            <Path Data="{StaticResource Geo.Compact}" Style="{StaticResource Ico.Fill}"
+                                  Visibility="{Binding IsCompact, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource Btn.Ico}" Command="{Binding ToggleKioskModeCommand}"
+                            ToolTip="Modo kiosko: pantalla completa sin chrome (Ctrl+Shift+K para salir)">
+                        <Grid>
+                            <Path Data="{StaticResource Geo.Kiosk}" Style="{StaticResource Ico}"
+                                  Visibility="{Binding IsKioskMode, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+                            <Path Data="{StaticResource Geo.Kiosk}" Style="{StaticResource Ico.Fill}"
+                                  Visibility="{Binding IsKioskMode, Converter={StaticResource BoolToVis}}" />
                         </Grid>
                     </Button>
                 </StackPanel>
@@ -596,7 +646,8 @@
                                       Padding="12,0,0,0"
                                       ItemsSource="{Binding Rows}"
                                       SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
-                                      ItemTemplate="{StaticResource RowTpl}">
+                                      ItemTemplate="{StaticResource RowTpl}"
+                                      MouseRightButtonDown="OnTreeRightButtonDown">
                                 <!-- El menu va en el contenedor de la fila: pinchar con
                                      el derecho en cualquier punto de la fila lo abre. -->
                                 <ListView.ItemContainerStyle>
@@ -609,7 +660,7 @@
                             <!-- Estado vacio: explica que hacer, no solo dice que no hay nada -->
                             <StackPanel Grid.Row="1" MaxWidth="430" Margin="24"
                                         VerticalAlignment="Center" HorizontalAlignment="Center"
-                                        Visibility="{Binding HasResult, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">
+                                        Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
                                 <Path Data="{StaticResource Geo.Tree}" Style="{StaticResource Ico}"
                                       Width="26" Height="26" StrokeThickness="1.1"
                                       HorizontalAlignment="Center" />
@@ -1250,7 +1301,8 @@
         <Border Grid.Row="2"
                 Background="{DynamicResource Bg.Panel}"
                 BorderBrush="{DynamicResource Rule.Hair}"
-                BorderThickness="0,1,0,0">
+                BorderThickness="0,1,0,0"
+                Visibility="{Binding IsKioskMode, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">
             <Grid Height="28" Margin="12,0,14,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />

@@ -316,3 +316,25 @@ public sealed class EnumToVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => Binding.DoNothing;
 }
+
+/// <summary>Progreso 0-100 -> 0-1 para TaskbarItemInfo.ProgressValue.</summary>
+public sealed class ProgressToTaskbarConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var progress = value switch
+        {
+            double d => d,
+            float f => f,
+            int i => i,
+            _ => 0d
+        };
+
+        if (double.IsNaN(progress) || progress <= 0) return 0d;
+        if (progress > 100) progress = 100;
+        return progress / 100.0;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => Binding.DoNothing;
+}

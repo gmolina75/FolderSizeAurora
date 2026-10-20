@@ -28,6 +28,8 @@ public enum TypeFilter
 public sealed class AppSettings
 {
     public bool DarkTheme { get; set; }
+    public bool CompactRows { get; set; }
+    public bool KioskMode { get; set; }
     public string? LastPath { get; set; }
     public SortMode SortMode { get; set; } = SortMode.Size;
     public bool SortAscending { get; set; }
