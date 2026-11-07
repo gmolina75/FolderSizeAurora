@@ -32,44 +32,27 @@ jobs:
       - name: Build
         run: dotnet build foldersizeaurora/FolderSizeAurora.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
 
-      - name: Publish (self-contained, win-x64)
-        run: dotnet publish foldersizeaurora/FolderSizeAurora.csproj --configuration ${{ env.CONFIGURATION }} --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o ${{ runner.temp }}/publish
+      - name: Test
+        run: dotnet test foldersizeaurora.Tests/FolderSizeAurora.Tests.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Publish (self-contained, win-x64, single file)
+        run: >
+          dotnet publish foldersizeaurora/FolderSizeAurora.csproj
+          --configuration ${{ env.CONFIGURATION }}
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:PublishTrimmed=false
+          -o dist-standalone
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: FolderSizeAurora-${{ env.CONFIGURATION }}-win-x64
-          path: ${{ runner.temp }}/publish/**
+          path: dist-standalone/**
 
   build-installer:
     needs: build
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: FolderSizeAurora-${{ env.CONFIGURATION }}-win-x64
-          path: landing
-
-      - name: Install WiX Toolset
-        run: dotnet tool install --global wix
-
-      - name: Build MSI
-        run: |
-          wix build FolderSizeAurora.wxs -o landing/FolderSizeAurora.msi
-        env:
-          PATH: ${{ env.PATH }};C:\Users\runneradmin\.dotnet\tools
-
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: FolderSizeAurora-Installer
-          path: landing/FolderSizeAurora.msi
-
-  test:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -80,11 +63,31 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore
-        run: dotnet restore foldersizeaurora/FolderSizeAurora.csproj
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FolderSizeAurora-${{ env.CONFIGURATION }}-win-x64
+          path: dist-standalone
 
-      - name: Test
-        run: dotnet test foldersizeaurora.Tests/FolderSizeAurora.Tests.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix
+
+      - name: Build MSI (per-machine + per-user)
+        run: >
+          powershell -ExecutionPolicy Bypass
+          -File installer\Build-Installer.ps1
+          -Version ${{ github.ref_name }}
+          -SkipPublish
+        env:
+          PATH: ${{ env.PATH }};C:\Users\runneradmin\.dotnet\tools
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolderSizeAurora-Installer
+          path: |
+            installer/FolderSizeAurora.msi
+            installer/FolderSizeAurora-user.msi
 
   release:
     needs: [build, build-installer]
@@ -113,6 +116,7 @@ jobs:
         with:
           files: |
             release-files/FolderSizeAurora.msi
+            release-files/FolderSizeAurora-user.msi
             release-files/FolderSizeAurora-${{ github.ref_name }}-win-x64.zip
           generate_release_notes: true
           draft: false

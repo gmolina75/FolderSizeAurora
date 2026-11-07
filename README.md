@@ -245,7 +245,6 @@ dotnet publish .\foldersizeaurora\FolderSizeAurora.csproj -c Release -r win-x64 
 
 **Si te aparece `NETSDK1004` ("Assets file not found")**: es que falta el restore. Ejecuta
 `dotnet restore` una vez, o en Visual Studio usa **Build → Restore NuGet Packages**.
-
 **Si te aparece que falta el tipo de proyecto**: asegúrate de tener instalada la carga
 ".NET desktop development"; es la que aporta el soporte de WPF.
 
@@ -259,6 +258,69 @@ El proyecto apunta a **`net10.0-windows10.0.19041.0`**, que es lo natural para *
 La solución se genera con `dotnet new sln --format sln` y **no debe editarse a mano**: el SDK 10
 crea por defecto el formato nuevo `.slnx`, que Visual Studio 2022 no abre. Si en la carpeta
 apareciera un archivo `.slnx` en lugar de `.sln`, es que se regeneró con el valor por defecto.
+
+---
+
+## El instalador (editable)
+
+El instalador MSI se construye desde **`installer/FolderSizeAurora.wxs`**, un archivo de **WiX
+Toolset** totalmente editable: todo el comportamiento del instalador está ahí dentro.
+
+```powershell
+# Publica la app autocontenida, genera el icono y compila los dos MSI
+powershell -ExecutionPolicy Bypass -File installer\Build-Installer.ps1
+```
+
+| Archivo | Qué es |
+|---|---|
+| `installer\FolderSizeAurora.wxs` | **Fuente del instalador.** Se edita a mano |
+| `installer\Build-Installer.ps1` | Publica + compila (script de una orden) |
+| `installer\FolderSizeAurora.ico` | Icono multirresolución, generado desde `logo-256.png` |
+| `tools\Make-Ico.ps1` | Regenera el `.ico` cuando cambia el logo |
+
+Salida (`installer\`, se recompila; no se versiona):
+
+| MSI | Alcance | Requiere admin |
+|---|---|:--:|
+| `FolderSizeAurora.msi` | Por máquina → `Program Files` | Sí |
+| `FolderSizeAurora-user.msi` | Por usuario → `%LOCALAPPDATA%` | No |
+
+Instalar:
+
+```powershell
+msiexec /i installer\FolderSizeAurora-user.msi     # sin privilegios
+msiexec /i installer\FolderSizeAurora.msi          # requiere Administrador
+msiexec /i installer\FolderSizeAurora-user.msi /qn # silencioso
+```
+
+### Qué incluye el instalador
+
+- Asistente con **carpeta de instalación elegible** (`WixUI_InstallDir`).
+- **Accesos directos**: Menú Inicio (por defecto), Escritorio e *Iniciar con Windows* (opcionales,
+  se activan desde el asistente).
+- **Protocolo `foldersizeaurora://`** registrado en el sistema, para que las notificaciones con
+  acciones funcionen sin abrir la app primero.
+- **Actualización** entre versiones: el `UpgradeCode` es fijo y el `ProductCode` cambia por release.
+- Entrada completa en **Agregar y quitar programas**, con icono y desinstalación.
+
+### Cómo editarlo
+
+Todo se cambia en el `.wxs` y se recompila:
+
+| Quiero… | Cambio en el `.wxs` |
+|---|---|
+| Cambiar la versión | `Version="$(var.Version)"` se pasa por `-d Version=1.2.0` |
+| Cambiar la carpeta | `Name="Folder Size Aurora"` dentro de `Directory` |
+| Añadir un acceso directo | Copia un `<Component>` con `<Shortcut>` y su `<Feature>` |
+| Cambiar el protocolo | `Software\Classes\foldersizeaurora` en `ProtocolHandler` |
+| Cambiar el icono | `Icon Id="FolderSizeAuroraIcon" SourceFile="..."` |
+
+Los parámetros de compilación (`Scope`, `RootDir`, `RegistryRoot`, `InstallFolderId`) son variables
+del preprocesador de WiX, así que el mismo `.wxs` genera las dos variantes sin duplicarse.
+
+> **Cuidado con los GUID**: `UpgradeCode` identifica la *familia* de producto y **no** debe
+> cambiar entre versiones (es lo que permite actualizar). `ProductCode` identifica *esta* versión
+> y sí es distinto en cada release.
 
 ---
 
@@ -284,6 +346,9 @@ foldersizeaurora/
 │  ├─ ExportService.cs             CSV / JSON / informe
 │  ├─ SettingsService.cs           JSON en %APPDATA%
 │  ├─ ThemeService.cs              Cambio de tema en caliente
+│  ├─ ScanStore.cs                 Historial de escaneos en SQLite
+│  ├─ TrayService.cs               Bandeja del sistema + arranque con Windows
+│  ├─ UpdateService.cs             Comprobación de actualizaciones (GitHub Releases)
 │  └─ Formatter.cs                 Bytes, conteos, duraciones
 ├─ ViewModels/
 │  ├─ ObservableObject.cs          Base INPC
@@ -293,6 +358,15 @@ foldersizeaurora/
 └─ Themes/
    ├─ Light.xaml / Dark.xaml       Paletas
    └─ Controls.xaml                Estilos de todos los controles
+
+installer/
+├─ FolderSizeAurora.wxs            Fuente del MSI (editable)
+└─ Build-Installer.ps1             Publica + compila los instaladores
+
+tools/
+├─ Program.cs                      Arnés de verificación de interfaz
+├─ UiCheck.csproj
+└─ Make-Ico.ps1                    Genera el .ico desde el logo
 ```
 
 Ajustes: `%APPDATA%\FolderSizeAurora\settings.json`

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================
+  Folder Size Aurora - Instalador MSI (WiX Toolset 4/5/6/7)
+  ============================================================================
+
+  ESTE ARCHIVO ES EDITABLE. Todo lo que define el comportamiento del
+  instalador esta aqui. Para cambiarlo, edita este .wxs y recompila:
+
+      powershell -ExecutionPolicy Bypass -File installer\Build-Installer.ps1
+
+  O bien, compilando una variante concreta a mano:
+
+      wix build installer\FolderSizeAurora.wxs -o out.msi -d Scope=perMachine -d RootDir=ProgramFiles64Folder -d InstallFolderId=INSTALLFOLDER -d RegistryRoot=HKLM
+
+  VARIANTES
+  * perMachine -> Program Files, protocolo en HKLM, requiere Administrador.
+  * perUser    -> AppData local, protocolo en HKCU, instala sin Administrador.
+
+  QUE PUEDES CAMBIAR AQUI
+  * Version / Manufacturer                     -> Version del producto
+  * UpgradeCode                                -> GUID de la familia de producto
+  * INSTALLFOLDER / Name                       -> Carpeta de instalacion
+  * Feature Level                               -> Que se instala por defecto
+  * Accesos directos (Menu Inicio / Escritorio / Inicio con Windows)
+  * Protocolo foldersizeaurora://               -> Registro del protocolo
+  * Icon                                        -> Icono del producto
+  * Variables de la linea de compilacion       -> Scope, RootDir, RegistryRoot
+
+  NOTAS
+  * El ejecutable debe ser la version AUTOCONTENIDA (dotnet publish con
+    self-contained=true). Sin runtime dentro, el MSI instala algo que no
+    arranca en un equipo limpio.
+  * UpgradeCode NO se cambia entre versiones del mismo producto: identifica la
+    "familia" y es lo que permite actualizar. El ProductCode si es distinto en
+    cada release (lo genera WiX con -d UpgradeCode si lo omites).
+  ============================================================================
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="Folder Size Aurora"
+    Manufacturer="Folder Size Aurora"
+    Version="$(var.Version)"
+    UpgradeCode="$(var.UpgradeCode)"
+    Scope="$(var.Scope)"
+    Compressed="yes"
+    InstallerVersion="500"
+    Codepage="65001"
+    Language="1033">
+
+    <SummaryInformation Description="Folder Size Aurora - Analizador de espacio en disco" />
+
+    <MajorUpgrade
+      DowngradeErrorMessage="Ya hay una version mas reciente de [ProductName] instalada."
+      AllowSameVersionUpgrades="yes"
+      Schedule="afterInstallInitialize" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="FolderSizeAuroraIcon" SourceFile="FolderSizeAurora.ico" />
+
+    <!-- ===================================================================
+         UI: instalador con directorio elegible (WixUI_InstallDir)
+         =================================================================== -->
+    <UI Id="WixUI_InstallDir">
+      <UIRef Id="WixUI_InstallDir" />
+      <Property Id="WIXUI_INSTALLDIR" Value="$(var.InstallFolderId)" />
+      <Property Id="ARPPRODUCTICON" Value="FolderSizeAuroraIcon" />
+      <Property Id="ARPURLINFOABOUT" Value="https://github.com/gmolina75/FolderSizeAurora" />
+      <Property Id="ARPNOREPAIR" Value="1" />
+    </UI>
+
+    <!-- ===================================================================
+         CARPETAS
+         =================================================================== -->
+    <StandardDirectory Id="$(var.RootDir)">
+      <Directory Id="$(var.InstallFolderId)" Name="Folder Size Aurora">
+        <Directory Id="ShortcutFolder" Name="Accesos directos">
+          <Directory Id="MenuFolder" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuDir" Name="Folder Size Aurora" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <StandardDirectory Id="StartupFolder" />
+
+    <!-- ===================================================================
+         COMPONENTES
+         =================================================================== -->
+    <ComponentGroup Id="ApplicationComponents">
+      <!-- Aplicacion principal -->
+      <Component Id="MainExecutable" Directory="$(var.InstallFolderId)" Guid="{5D5A2B9B-490B-444D-B6C3-E0F547DF9C7F}">
+        <File Id="FolderSizeAuroraExe"
+              Source="..\dist-standalone\FolderSizeAurora.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Acceso directo en el Menu Inicio -->
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuDir" Guid="{1F2E3D4C-5B6A-4798-8A9B-0C1D2E3F4A5B}">
+        <Shortcut Id="StartMenuApp"
+                  Name="Folder Size Aurora"
+                  Description="Analizador de espacio en disco"
+                  Target="[$(var.InstallFolderId)]FolderSizeAurora.exe"
+                  WorkingDirectory="$(var.InstallFolderId)"
+                  Icon="FolderSizeAuroraIcon" />
+        <RemoveFolder Id="RemoveProgramMenuDir" Directory="ProgramMenuDir" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Folder Size Aurora" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <!-- Acceso directo en el Escritorio -->
+      <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="{2A3B4C5D-6E7F-4809-9A0B-1C2D3E4F5A6B}">
+        <Shortcut Id="DesktopApp"
+                  Name="Folder Size Aurora"
+                  Description="Analizador de espacio en disco"
+                  Target="[$(var.InstallFolderId)]FolderSizeAurora.exe"
+                  WorkingDirectory="$(var.InstallFolderId)"
+                  Icon="FolderSizeAuroraIcon" />
+        <RegistryValue Root="HKCU" Key="Software\Folder Size Aurora" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <!-- Iniciar automaticamente con Windows -->
+      <Component Id="StartupShortcut" Directory="StartupFolder" Guid="{3B4C5D6E-7F80-491A-8B1C-2D3E4F5A6B7C}">
+        <Shortcut Id="StartupApp"
+                  Name="Folder Size Aurora"
+                  Description="Iniciar Folder Size Aurora con Windows"
+                  Target="[$(var.InstallFolderId)]FolderSizeAurora.exe"
+                  WorkingDirectory="$(var.InstallFolderId)"
+                  Icon="FolderSizeAuroraIcon" />
+        <RegistryValue Root="HKCU" Key="Software\Folder Size Aurora" Name="StartupShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <!--
+        Protocolo foldersizeaurora://
+        La app tambien lo registra en HKCU al arrancar; aqui queda escrito desde
+        la instalacion para que las notificaciones funcionen sin abrir la app.
+      -->
+      <Component Id="ProtocolHandler" Directory="$(var.InstallFolderId)" Guid="{4C5D6E7F-8091-4A2B-9C2D-3E4F5A6B7C8D}">
+        <RegistryKey Root="$(var.RegistryRoot)" Key="Software\Classes\foldersizeaurora">
+          <RegistryValue Type="string" Value="URL:Folder Size Aurora Protocol" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+        </RegistryKey>
+        <RegistryKey Root="$(var.RegistryRoot)" Key="Software\Classes\foldersizeaurora\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[$(var.InstallFolderId)]FolderSizeAurora.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+        <RegistryValue Root="$(var.RegistryRoot)" Key="Software\Folder Size Aurora" Name="InstallFolder" Type="string" Value="[$(var.InstallFolderId)]" KeyPath="yes" />
+      </Component>
+
+      <!-- Datos de desinstalacion / version instalada -->
+      <Component Id="UninstallRegistry" Directory="$(var.InstallFolderId)" Guid="{5D6E7F80-91A2-4B3C-8D2E-4F5A6B7C8D9E}">
+        <RegistryValue Root="$(var.RegistryRoot)" Key="Software\Folder Size Aurora" Name="Version" Type="string" Value="$(var.Version)" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- ===================================================================
+         FEATURES: que se puede activar o desactivar al instalar
+         =================================================================== -->
+    <Feature Id="MainFeature" Title="Folder Size Aurora" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="ApplicationComponents" />
+    </Feature>
+
+    <!-- Carpeta de acceso directo en el Menu Inicio (activado por defecto) -->
+    <Feature Id="StartMenuFeature" Title="Acceso directo en el menu Inicio" Level="1">
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- Acceso directo en el Escritorio -->
+    <Feature Id="DesktopFeature" Title="Acceso directo en el Escritorio" Level="100">
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- Iniciar automaticamente con Windows -->
+    <Feature Id="StartupFeature" Title="Iniciar con Windows" Level="100">
+      <ComponentRef Id="StartupShortcut" />
+    </Feature>
+
+    <!-- Registro del protocolo foldersizeaurora:// -->
+    <Feature Id="ProtocolFeature" Title="Registrar el protocolo foldersizeaurora://" Level="1">
+      <ComponentRef Id="ProtocolHandler" />
+    </Feature>
+
+    <Feature Id="UninstallFeature" Title="Informacion de desinstalacion" Level="1">
+      <ComponentRef Id="UninstallRegistry" />
+    </Feature>
+  </Package>
+</Wix>
