@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\TreeSizeClone\TreeSizeClone.csproj" />
+    <ProjectReference Include="Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\foldersizeaurora\FolderSizeAurora.csproj" />
   </ItemGroup>
 
   <!--
@@ -23,7 +23,7 @@
     XAML de tema se enlazan aqui para que las rutas existan tambien.
   -->
   <ItemGroup>
-    <Page Include="Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\TreeSizeClone\Themes\*.xaml"
+    <Page Include="Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\foldersizeaurora\Themes\*.xaml"
           Link="Themes\%(Filename)%(Extension)" />
   </ItemGroup>
 

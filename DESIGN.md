@@ -131,7 +131,7 @@ fuentes que sustituyen el glifo por otra cosa.
 │        │ ├─────────────────────────────────────────────┤    │
 │ UNIDA- │ │ Filas del árbol (26 px, virtualizadas)       │    │
 │ DES    │ │  ⌄  foldersizeAurora      293,88 MB ▓▓▓▓ 4 43│  │
-│ LECTU- │ │   ⌄  TreeSizeClone       149,16 MB ▓▓     6 38│  │
+│ LECTU- │ │   ⌄  FolderSizeAurora      149,16 MB ▓▓     6 38│  │
 │ RA     │ │     ›  bin               146,04 MB ▓      0  8│  │
 │        │ └─────────────────────────────────────────────┘    │
 │        │ Detalle de la selección (ralla azul a la izquierda)  │

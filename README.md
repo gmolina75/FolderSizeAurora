@@ -225,7 +225,7 @@ Requisitos: **Visual Studio 2026 (18.x)** con la carga de trabajo **".NET deskto
 Desde consola, en la carpeta del proyecto:
 
 ```powershell
-cd .\TreeSizeClone
+cd .\foldersizeaurora
 dotnet restore
 dotnet build
 dotnet run
@@ -234,11 +234,11 @@ dotnet run
 Y para generar el ejecutable:
 
 ```powershell
-# Carpeta normal (necesita el runtime .NET 8 Desktop instalado)
-dotnet publish .\TreeSizeClone\TreeSizeClone.csproj -c Release -o .\dist
+# Carpeta normal (necesita el runtime .NET 10 Desktop instalado)
+dotnet publish .\foldersizeaurora\FolderSizeAurora.csproj -c Release -o .\dist
 
 # Autocontenido: NO necesita instalar nada, se lleva el runtime dentro (≈145 MB)
-dotnet publish .\TreeSizeClone\TreeSizeClone.csproj -c Release -r win-x64 --self-contained true -o .\dist-standalone
+dotnet publish .\foldersizeaurora\FolderSizeAurora.csproj -c Release -r win-x64 --self-contained true -o .\dist-standalone
 ```
 
 > Ya hay una publicación autocontenida en la carpeta `dist/` de este proyecto.
@@ -251,15 +251,8 @@ dotnet publish .\TreeSizeClone\TreeSizeClone.csproj -c Release -r win-x64 --self
 
 ### Nota sobre versiones de .NET
 
-El proyecto apunta a **`net10.0-windows`**, que es lo natural para **Visual Studio 2026**
-(18.x, con el SDK .NET 10). Si algún día necesitas abrirlo en Visual Studio 2022, cambia una
-sola línea en `TreeSizeClone\TreeSizeClone.csproj`:
-
-```xml
-<TargetFramework>net8.0-windows</TargetFramework>
-```
-
-Ambos targeting packs vienen instalados, así que el cambio es inmediato y sin descargas.
+El proyecto apunta a **`net10.0-windows10.0.19041.0`**, que es lo natural para **Visual Studio 2026**
+(18.x, con el SDK .NET 10).
 
 ### Nota sobre la solución
 
@@ -272,7 +265,7 @@ apareciera un archivo `.slnx` en lugar de `.sln`, es que se regeneró con el val
 ## Estructura
 
 ```
-TreeSizeClone/
+foldersizeaurora/
 ├─ App.xaml / App.xaml.cs          Application, convertidores y manejo de excepciones
 ├─ MainWindow.xaml(.cs)            Ventana principal: panel lateral + 3 pestañas
 ├─ Models/
@@ -344,11 +337,11 @@ referencie:
     <AssemblyName>UiCheck</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\TreeSizeClone\TreeSizeClone.csproj" />
+    <ProjectReference Include="..\..\foldersizeaurora\FolderSizeAurora.csproj" />
   </ItemGroup>
   <!-- App.xaml usa rutas pack absolutas, asi que el arnés necesita los XAML de tema -->
   <ItemGroup>
-    <Page Include="..\..\TreeSizeClone\Themes\*.xaml" Link="Themes\%(Filename)%(Extension)" />
+    <Page Include="..\..\foldersizeaurora\Themes\*.xaml" Link="Themes\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
 ```

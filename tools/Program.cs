@@ -560,8 +560,8 @@ internal static class Program
         settings.MonitorRules.Clear();
         settings.MonitorRules.Add(new MonitorRule
         {
-            Path = @"Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\TreeSizeClone",
-            Label = "TreeSizeClone",
+            Path = @"Z:\Customers\Demo\4.1\win32\GEN_MODULES\Process\foldersizeAurora\foldersizeaurora",
+            Label = "FolderSizeAurora",
             Kind = MonitorKind.Folder,
             LimitBytes = 100L * 1024 * 1024,
             Mode = MonitorLimitMode.Bytes
@@ -611,7 +611,7 @@ internal static class Program
     private static void SeedActivity(MainViewModel vm)
     {
         vm.Alerts.Insert(0, new AlertItem(
-            DateTime.Now.AddMinutes(-3), @"Z:\Customers\Demo\4.1\...\TreeSizeClone",
+            DateTime.Now.AddMinutes(-3), @"Z:\Customers\Demo\4.1\...\foldersizeaurora",
             "La carpeta supera el limite de 100 MB.", 118_300_000, 104_857_600));
 
         vm.Alerts.Insert(0, new AlertItem(
