@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -289,6 +290,54 @@ public partial class MainWindow : Window
         if (FindRowMenu(e.OriginalSource as DependencyObject) is ContextMenu menu && DataContext is not null)
         {
             menu.DataContext = DataContext;
+        }
+    }
+
+    /// <summary>
+    /// Doble clic en una carpeta: se entra en ella (modo capa) sin volver a escanear.
+    /// El arbol completo ya esta en memoria, asi que entrar es solo cambiar la vista.
+    /// </summary>
+    private void OnTreeDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not FrameworkElement element) return;
+        if (element.DataContext is not TreeRow { IsFolder: true } row) return;
+
+        _viewModel.NavigateIntoCommand.Execute(row);
+    }
+
+    /// <summary>
+    /// Los menus contextuales de los graficos viven en un arbol visual aparte (el popup),
+    /// asi que no heredan el DataContext del ViewModel y su PlacementTarget todavia no
+    /// existe mientras se construyen. Por eso no se enlaza nada en el XAML: aqui se
+    /// asigna el comando y el parametro en el momento de abrir el menu, cuando el
+    /// PlacementTarget ya apunta a la fila correcta.
+    /// </summary>
+    private void OnChartMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu) return;
+        if (DataContext is not MainViewModel vm) return;
+
+        // El elemento de grafico bajo el raton: el PlacementTarget es la celda.
+        var item = (menu.PlacementTarget as FrameworkElement)?.DataContext as ChartItem;
+        if (item is null) return;
+
+        foreach (var entry in menu.Items.OfType<MenuItem>())
+        {
+            switch (entry.Tag as string)
+            {
+                case "openPath":
+                    entry.Command = vm.OpenChartItemPathCommand;
+                    entry.CommandParameter = item.Tooltip;
+                    break;
+                case "copyPath":
+                    entry.Command = vm.CopyChartItemPathCommand;
+                    entry.CommandParameter = item.Tooltip;
+                    break;
+                case "copyExtension":
+                    entry.Command = vm.CopyChartItemPathCommand;
+                    entry.CommandParameter = item.Label;
+                    break;
+            }
         }
     }
 

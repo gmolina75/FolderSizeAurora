@@ -29,6 +29,7 @@
     <Geometry x:Key="Geo.Moon">M13.2,9.8 A5.4,5.4 0 1 1 6.4,3 A4.2,4.2 0 0 0 13.2,9.8 Z</Geometry>
     <Geometry x:Key="Geo.ChevronRight">M6.2,3.4 L10.6,8 L6.2,12.6</Geometry>
     <Geometry x:Key="Geo.ChevronDown">M3.4,6.2 L8,10.6 L12.6,6.2</Geometry>
+    <Geometry x:Key="Geo.Up">M8,12.6 L3.6,7.4 M8,12.6 L12.4,7.4</Geometry>
     <Geometry x:Key="Geo.TriangleUp">M5,1.6 L9,7.4 L1,7.4 Z</Geometry>
     <Geometry x:Key="Geo.TriangleDown">M5,8.4 L1,2.6 L9,2.6 Z</Geometry>
     <Geometry x:Key="Geo.Play">M4.6,3 L12.6,8 L4.6,13 Z</Geometry>

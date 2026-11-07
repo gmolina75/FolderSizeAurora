@@ -257,8 +257,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RestoreSettings();
         RefreshDrives();
 
-        // Chequeo silencioso de actualizaciones en segundo plano
-        _ = Task.Run(async () => await _updateService.CheckAsync());
+        // Chequeo silencioso de actualizaciones en segundo plano, solo si el usuario
+        // lo tiene activado. No bloquea el arranque ni falla si no hay red.
+        if (_settings.CheckForUpdates)
+        {
+            _ = Task.Run(async () => await _updateService.CheckAsync());
+        }
     }
 
     // ---------------------------------------------------------------- Colecciones
@@ -997,16 +1001,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var progress = new Progress<ScanSnapshot>(p =>
             {
-                ScannedBytes = p.BytesSoFar;
-                ScannedFiles = p.FilesSoFar;
-                ScannedFolders = p.FoldersSoFar;
-                StatusText = $"Analizando...  {Formatter.Bytes(p.BytesSoFar)} en {Formatter.Count(p.FilesSoFar)} archivos";
-
-                // Modo pre-scan: renderizar filas parciales con los hijos directos que ya se conocen
-                if (p.PartialRootChildren.Count > 0)
+                // El progreso puede llegar desde un hilo que no es el de la interfaz
+                // (por ejemplo, si el escaneo se dispara desde el arnes o desde una
+                // tarea en segundo plano). Tocar la coleccion de filas desde ahi
+                // revienta el CollectionView de WPF, asi que todo se encola aqui.
+                Post(() =>
                 {
-                    UpdatePreScanRows(path, p);
-                }
+                    ScannedBytes = p.BytesSoFar;
+                    ScannedFiles = p.FilesSoFar;
+                    ScannedFolders = p.FoldersSoFar;
+                    StatusText = $"Analizando...  {Formatter.Bytes(p.BytesSoFar)} en {Formatter.Count(p.FilesSoFar)} archivos";
+
+                    // Modo pre-scan: renderizar filas parciales con los hijos directos que ya se conocen
+                    if (p.PartialRootChildren.Count > 0)
+                    {
+                        UpdatePreScanRows(path, p);
+                    }
+                });
             });
 
             // El recorrido del disco no puede tocar el hilo de la interfaz. Un
