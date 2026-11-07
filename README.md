@@ -1,7 +1,7 @@
 # Folder Size Aurora
 
 Analizador de espacio en disco para Windows, escrito en **.NET (WPF)** sin dependencias
-de terceros. Sustituye a TreeSize Free en las funciones que se usan en la practica y añade
+de terceros. Sustituye a  en las funciones que se usan en la practica y añade
 un **monitoreo de límites de tamaño** con avisos por varios canales.
 
 > Estado verificado: compila con el **MSBuild de Visual Studio Community 2026 (18.10)** en las
@@ -52,7 +52,7 @@ intacto y se puede volver a la vista completa en cualquier momento.
 - **JSON** con el árbol completo y metadatos.
 - **Informe de texto** con los 15 mayores y un resumen.
 
-### Monitoreo de límites  ← la diferencia frente a TreeSize Free
+### Monitoreo de límites  ← la diferencia frente a 
 - Reglas sobre **carpetas** (límite en bytes) y **unidades** (límite en porcentaje).
 - Comprobación periódica configurable (cada minuto a cada día), con botón **Comprobar ahora**.
 - Barra de uso por regla, en azul mientras está en rango y en rojo al superarse, con el estado
@@ -383,7 +383,7 @@ El ejecutable original, `TreeSizeFree.exe`, se analysó con REA:
   (`CURSOR_HAND`, `RZCOMMON_HANDCURSOR`), diálogos y cadenas.
   Evidencia `ev_4be43139788d5615a64ddda3142d64d52147954d31eb768e34ec69a857d82f52`.
 
-Es decir: TreeSize Free es C/C++ nativo, no .NET. Para reconstruirlo harían falta Ghidra con
+Es decir:  es C/C++ nativo, no .NET. Para reconstruirlo harían falta Ghidra con
 JDK 21+, IDA o Hopper, que no están configurados en esta máquina. Por eso esta aplicación se
 implementó desde cero en .NET replicating su comportamiento observable, en lugar de copiar
 código.
